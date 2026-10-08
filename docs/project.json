@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Add GitHub Pages deployment with subpath support",
+  "version_description": "Improve land-ocean color contrast with water-mask based color separation",
   "preview_type": "pc"
 }

@@ -328,41 +328,84 @@ export class GlobeEngine {
     const material = new THREE.MeshPhongMaterial({
       map: this.textures.day,
       bumpMap: this.textures.topology,
-      bumpScale: 0.014,
+      bumpScale: 0.02,
       specularMap: this.textures.water,
-      specular: new THREE.Color(0x224466),
-      shininess: 16,
+      // 海面高光显著增强，让海洋呈现湿润反光质感，与哑光陆地区分开
+      specular: new THREE.Color(0x8fc4ff),
+      shininess: 42,
     });
 
-    // 注入夜景灯光：白昼由 map 决定，背光面叠加城市灯光
+    // 注入水陆分离着色：
+    // 1) 用 water 遮罩（白=海洋 / 黑=陆地，已实测确认）分别计算目标色
+    // 2) 以「目标色 / 原色」比例作用于 Phong 光照结果 —— 既完成海陆调色分离，
+    //    又完整保留海洋镜面高光、地形起伏明暗与边缘光
+    // 3) 夜面城市灯光叠加
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uNightMap = { value: this.textures.night };
+      shader.uniforms.uWaterMap = { value: this.textures.water };
       shader.uniforms.uNightStrength = { value: 1.0 };
+      shader.uniforms.uOceanTint = { value: new THREE.Color(0x1a6ed8) };
+      shader.uniforms.uOceanDeep = { value: new THREE.Color(0x031a3d) };
+      shader.uniforms.uLandBoost = { value: 1.34 };
 
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
           `#include <common>
            uniform sampler2D uNightMap;
-           uniform float uNightStrength;`
+           uniform sampler2D uWaterMap;
+           uniform float uNightStrength;
+           uniform vec3 uOceanTint;
+           uniform vec3 uOceanDeep;
+           uniform float uLandBoost;
+
+           float globeLuma(vec3 c) {
+             return dot(c, vec3(0.2126, 0.7152, 0.0722));
+           }`
         )
         .replace(
           '#include <dithering_fragment>',
           `#include <dithering_fragment>
-           // 夜面城市灯光：白昼贴图存在时才采样（关掉卫星影像后仅剩基础球体）
+
            #ifdef USE_MAP
+             vec3 baseCol = texture2D(map, vMapUv).rgb;
+             // water 遮罩：白色 = 海洋，黑色 = 陆地（已实测确认）
+             float waterRaw = texture2D(uWaterMap, vMapUv).r;
              vec3 nightCol = texture2D(uNightMap, vMapUv).rgb;
            #else
+             vec3 baseCol = vec3(0.14, 0.20, 0.30);
+             float waterRaw = 0.0;
              vec3 nightCol = vec3(0.0);
            #endif
-           float lum = dot(nightCol, vec3(0.299, 0.587, 0.114));
+
+           // 反相得到陆地遮罩；海岸线处遮罩有锯齿，用窄区间平滑过渡
+           float landMask = 1.0 - smoothstep(0.34, 0.62, waterRaw);
+
+           float lum = globeLuma(baseCol);
+
+           // ── 目标海色：向深蓝偏移并拉高饱和度、压低亮度 ──
+           vec3 oceanCol = baseCol;
+           oceanCol = mix(oceanCol, uOceanDeep, 0.42 * (1.0 - smoothstep(0.0, 0.30, lum)));
+           oceanCol = mix(oceanCol, uOceanTint, 0.40);
+           oceanCol *= 0.74;
+
+           // ── 目标陆色：提亮并轻微增强暖调与对比 ──
+           vec3 landCol = baseCol * uLandBoost;
+           landCol = mix(vec3(globeLuma(landCol)), landCol, 1.20);
+           landCol += vec3(0.045, 0.032, 0.014) * lum;
+
+           // ── 比例校正：作用于已光照颜色，保留高光 / 地形 / 大气光 ──
+           vec3 ratio = mix(oceanCol, landCol, landMask) / max(baseCol, vec3(0.03));
+           gl_FragColor.rgb *= clamp(ratio, vec3(0.0), vec3(2.6));
+
+           // ── 夜面城市灯光与冷色氛围 ──
            vec3 sunDir = normalize(vec3(-4.2, 2.6, 3.4));
            vec3 nrm = normalize(vNormal);
            float dayAmount = clamp(dot(nrm, sunDir), 0.0, 1.0);
            float nightMask = smoothstep(0.28, -0.05, dot(nrm, sunDir));
-           float cityGlow = pow(lum, 1.35) * nightMask * uNightStrength;
+           float cityLum = dot(nightCol, vec3(0.299, 0.587, 0.114));
+           float cityGlow = pow(cityLum, 1.35) * nightMask * uNightStrength;
            gl_FragColor.rgb += nightCol * cityGlow * 1.75 + vec3(0.16, 0.20, 0.34) * (1.0 - dayAmount) * 0.16;
-           gl_FragColor.rgb *= mix(0.34, 1.0, dayAmount * 0.85 + 0.15);
           `
         );
 
@@ -411,9 +454,10 @@ export class GlobeEngine {
           // 以真实视线方向计算菲涅尔边缘强度（相机绕行时保持对称）
           vec3 viewDir = normalize(cameraPosition - vWorldPos);
           float rim = 1.0 - abs(dot(vNormalW, viewDir));
-          float strength = pow(rim, 2.6);
+          // 指数调高 + 强度降低：光晕更贴合边缘，避免糊住地表细节
+          float strength = pow(rim, 3.6);
           vec3 col = mix(uColorB, uColorA, strength);
-          gl_FragColor = vec4(col, strength * 0.85 * uIntensity);
+          gl_FragColor = vec4(col, strength * 0.62 * uIntensity);
         }
       `,
       transparent: true,
