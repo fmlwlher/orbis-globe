@@ -1,0 +1,8 @@
+{
+  "project_type": "web",
+  "sub_project_type": "",
+  "name": "ORBIS Globe",
+  "app_slug": "orbis-globe",
+  "version_description": "Build interactive 3D globe with drag rotate and zoom",
+  "preview_type": "pc"
+}

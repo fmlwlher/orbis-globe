@@ -1,0 +1,52 @@
+# ── 依赖 ──────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+
+# ── 构建产物 ──────────────────────────────────────────
+dist/
+dist-ssr/
+build/
+*.local
+
+# ── 日志 ──────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ── 编辑器 / 系统 ─────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── 环境变量（切勿提交密钥） ──────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── 缓存 ──────────────────────────────────────────────
+.cache/
+.temp/
+.tmp/
+coverage/
+*.tsbuildinfo
+
+# ── 运行时 ────────────────────────────────────────────
+.pids
+*.pid
+*.seed
+
+# ── AI 工作区工具缓存（非项目代码） ───────────────────
+.codebuddy/
+.genie/
+.cloudstudio
