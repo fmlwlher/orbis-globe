@@ -6,6 +6,16 @@
 ![Tech](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
 ![Tech](https://img.shields.io/badge/Three.js-0.186-000000?logo=three.js&logoColor=white)
 ![Tech](https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white)
+![Deploy](https://github.com/fmlwlher/orbis-globe/actions/workflows/deploy-pages.yml/badge.svg)
+
+## 🌐 在线演示
+
+**<https://fmlwlher.github.io/orbis-globe/>**
+
+- 完整版（React 工程构建产物）
+- 单文件离线版：**<https://fmlwlher.github.io/orbis-globe/globe.html>**
+
+> 若看到「不支持 WebGL」提示，请在浏览器设置中开启**硬件加速**后刷新。
 
 ---
 
@@ -39,15 +49,21 @@
 
 ## 两种打开方式
 
-### 方式一：单文件版（推荐，零配置）
+### 方式一：在线访问（最省事）
 
-直接用浏览器打开根目录的 **`globe.html`** 即可。
+直接打开 **<https://fmlwlher.github.io/orbis-globe/>**，无需任何本地环境。
+
+想要完全离线的版本，可访问 **<https://fmlwlher.github.io/orbis-globe/globe.html>** 后另存为本地文件。
+
+### 方式二：本地单文件（离线可用）
+
+下载仓库根目录的 **`globe.html`**，双击用浏览器打开即可。
 
 该文件已将 Three.js 库与全部地球贴图**以 base64 内嵌**，总计约 1.3MB，**完全离线可用**，不需要 Node.js、不需要联网、不需要任何服务器。
 
 > 建议使用 Chrome / Edge / Firefox / Safari 最新版，并确保浏览器开启了硬件加速（WebGL）。
 
-### 方式二：完整工程（开发用）
+### 方式三：完整工程（开发用）
 
 ```bash
 # 前端
@@ -87,6 +103,8 @@ cd frontend && pnpm build
 
 ```
 .
+├── .github/workflows/
+│   └── deploy-pages.yml          # GitHub Pages 自动部署
 ├── globe.html                    # ★ 单文件完整版（离线可用，双击即开）
 ├── frontend/
 │   ├── public/textures/          # 地球贴图资源
@@ -130,6 +148,22 @@ gl_FragColor.rgb += nightCol * cityGlow * 1.75;
 **性能** —— 背面标记自动淡出、按需渲染、纹理各向异性过滤、像素比上限 2。
 
 **容错** —— WebGL 不可用时显示引导卡片而非白屏；单文件版内嵌库失败时自动回退三个 CDN 源。
+
+---
+
+## 部署
+
+推送到 `main` 分支即自动构建并发布到 GitHub Pages（见 `.github/workflows/deploy-pages.yml`）。
+
+部署相关的两处关键适配：
+
+| 问题 | 解决方式 |
+| --- | --- |
+| 站点部署在 `/orbis-globe/` 子路径 | `vite.config.ts` 从 `GITHUB_REPOSITORY` 自动推导 `base`，本地开发回退为 `/` |
+| 贴图使用绝对路径 `/textures/...` 会 404 | 改用 `import.meta.env.BASE_URL` 拼接 |
+| React Router 不认识子路径 | `BrowserRouter` 传入 `basename={import.meta.env.BASE_URL}` |
+
+也可用 `VITE_BASE_PATH` 环境变量手动覆盖（如绑定自定义域名时设为 `/`）。
 
 ---
 
