@@ -329,16 +329,17 @@ export class GlobeEngine {
       map: this.textures.day,
       bumpMap: this.textures.topology,
       bumpScale: 0.02,
-      specularMap: this.textures.water,
-      // 海面高光显著增强，让海洋呈现湿润反光质感，与哑光陆地区分开
-      specular: new THREE.Color(0x8fc4ff),
-      shininess: 42,
+      // 镜面高光必须关闭：场景有两个方向光源（太阳 + rim 边缘光），开启 specular
+      // 会在海洋上各打出一个巨大的 Blinn-Phong 光斑（shininess 42 时半能量半径约
+      // 19°），经水陆比例校正放大后表现为两个刺眼的青色光球
+      specular: new THREE.Color(0x000000),
+      shininess: 1,
     });
 
     // 注入水陆分离着色：
     // 1) 用 water 遮罩（白=海洋 / 黑=陆地，已实测确认）分别计算目标色
     // 2) 以「目标色 / 原色」比例作用于 Phong 光照结果 —— 既完成海陆调色分离，
-    //    又完整保留海洋镜面高光、地形起伏明暗与边缘光
+    //    又保留地形起伏明暗与边缘光
     // 3) 夜面城市灯光叠加
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uNightMap = { value: this.textures.night };
@@ -423,6 +424,9 @@ export class GlobeEngine {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.FrontSide,
+      // 同样关闭镜面高光，防止太阳直射在云层球壳上形成暗淡光斑
+      specular: new THREE.Color(0x000000),
+      shininess: 1,
     });
     this.cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(EARTH_RADIUS * 1.004, 96, 64), cloudMat);
     this.earthGroup.add(this.cloudMesh);
