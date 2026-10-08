@@ -568,6 +568,71 @@
   letter-spacing: 0.03em;
   color: var(--g-text-faint);
 }
+.globe-actions__hint--axis {
+  margin-top: 5px;
+  color: var(--g-amber);
+  opacity: 0.72;
+}
+
+/* ── 坐标定位 ───────────────────────────────────────── */
+.globe-btn--sm {
+  flex: 1 1 0;
+  padding: 7px 8px;
+  font-size: 10.5px;
+}
+
+.globe-coord {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.globe-coord__input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--g-line-strong);
+  border-radius: 2px;
+  background: rgba(6, 13, 26, 0.72);
+  color: var(--g-text);
+  font-family: var(--g-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.globe-coord__input::placeholder {
+  color: var(--g-text-faint);
+  letter-spacing: 0.02em;
+}
+.globe-coord__input:focus {
+  border-color: var(--g-cyan);
+  box-shadow: 0 0 14px -5px var(--g-cyan);
+}
+/* 隐藏数字输入的步进箭头，保持观测台风格的整洁 */
+.globe-coord__input::-webkit-outer-spin-button,
+.globe-coord__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.globe-coord__input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.globe-coord__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.globe-coord__error {
+  margin: 9px 0 0;
+  font-family: var(--g-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+  color: #ff8f8f;
+}
 
 /* ── 遥测列表 ───────────────────────────────────────── */
 .globe-telemetry {

@@ -26,7 +26,12 @@ const CATEGORY_ORDER: Category[] = [
 
 const LAYER_LABELS: { key: LayerKey; label: string; hint: string }[] = [
   { key: 'satellite', label: '卫星影像', hint: '真实地表贴图与夜灯' },
-  { key: 'grid', label: '经纬网格', hint: '15° 间隔参考线' },
+  { key: 'grid', label: '经纬网格', hint: '网格总开关' },
+  { key: 'meridians', label: '经线', hint: '每 15° 一条经圈' },
+  { key: 'meridianLabels', label: '经度', hint: '标注每条经线的经度' },
+  { key: 'parallels', label: '纬线', hint: '含回归线与极圈虚线' },
+  { key: 'parallelLabels', label: '纬度', hint: '标注每条纬线的纬度' },
+  { key: 'axis', label: '地轴线', hint: '贯穿南北极的自转轴' },
   { key: 'markers', label: '观测标记', hint: '城市 / 地标 / 天文台' },
   { key: 'arcs', label: '航线弧光', hint: '以北京为枢纽的连线' },
   { key: 'atmosphere', label: '大气辉光', hint: '边缘散射光晕' },
@@ -53,6 +58,11 @@ const Index = () => {
   const [layers, setLayers] = useState<LayerVisibility>({
     satellite: true,
     grid: true,
+    meridians: true,
+    meridianLabels: true,
+    parallels: true,
+    parallelLabels: true,
+    axis: true,
     markers: true,
     arcs: true,
     atmosphere: true,
@@ -60,6 +70,8 @@ const Index = () => {
   });
   const [autoRotate, setAutoRotate] = useState(true);
   const [search, setSearch] = useState('');
+  const [coordInput, setCoordInput] = useState({ lat: '', lng: '' });
+  const [coordError, setCoordError] = useState('');
   const [clockText, setClockText] = useState('--:--:--');
   const [utcText, setUtcText] = useState('--:--:--');
 
@@ -155,6 +167,11 @@ const Index = () => {
   useEffect(() => {
     engineRef.current?.setLayerVisible('satellite', layers.satellite);
     engineRef.current?.setLayerVisible('grid', layers.grid);
+    engineRef.current?.setLayerVisible('meridians', layers.meridians);
+    engineRef.current?.setLayerVisible('meridianLabels', layers.meridianLabels);
+    engineRef.current?.setLayerVisible('parallels', layers.parallels);
+    engineRef.current?.setLayerVisible('parallelLabels', layers.parallelLabels);
+    engineRef.current?.setLayerVisible('axis', layers.axis);
     engineRef.current?.setLayerVisible('markers', layers.markers);
     engineRef.current?.setLayerVisible('arcs', layers.arcs);
     engineRef.current?.setLayerVisible('atmosphere', layers.atmosphere);
@@ -169,10 +186,40 @@ const Index = () => {
     engineRef.current?.setAutoRotate(autoRotate);
   }, [autoRotate]);
 
+  /** 复位：地轴与水平线成 66.5° */
   const handleReset = () => {
     engineRef.current?.setSelected(null);
-    engineRef.current?.focusOn(25, 20, 3.1);
+    engineRef.current?.resetView();
     setAutoRotate(true);
+  };
+
+  /** 输入经纬度定位，并在该坐标绘制蓝点 */
+  const handleLocate = () => {
+    const lat = Number.parseFloat(coordInput.lat);
+    const lng = Number.parseFloat(coordInput.lng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setCoordError('请输入有效的经纬度数值');
+      return;
+    }
+    if (lat < -90 || lat > 90) {
+      setCoordError('纬度需在 -90 ~ 90 之间');
+      return;
+    }
+    if (lng < -180 || lng > 180) {
+      setCoordError('经度需在 -180 ~ 180 之间');
+      return;
+    }
+
+    setCoordError('');
+    engineRef.current?.setSelected(null);
+    engineRef.current?.placeCoordPoint(lat, lng);
+    setCoordInput({ lat: String(lat), lng: String(lng) });
+  };
+
+  const handleClearCoord = () => {
+    engineRef.current?.clearCoordPoint();
+    setCoordError('');
   };
 
   const handleScreenshot = () => {
@@ -390,6 +437,52 @@ const Index = () => {
           <p className="globe-actions__hint">
             按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情
           </p>
+          <p className="globe-actions__hint globe-actions__hint--axis">
+            复位后地轴与水平线成 66.5°
+          </p>
+        </section>
+
+        <section className="globe-card globe-card--compact">
+          <h2 className="globe-card__title">
+            <span className="globe-card__index">04</span>坐标定位
+          </h2>
+          <div className="globe-coord">
+            <input
+              className="globe-coord__input"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              placeholder="纬度 -90 ~ 90"
+              aria-label="纬度"
+              value={coordInput.lat}
+              onChange={(e) => setCoordInput((p) => ({ ...p, lat: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
+            />
+            <input
+              className="globe-coord__input"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              placeholder="经度 -180 ~ 180"
+              aria-label="经度"
+              value={coordInput.lng}
+              onChange={(e) => setCoordInput((p) => ({ ...p, lng: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
+            />
+          </div>
+          <div className="globe-coord__actions">
+            <button type="button" className="globe-btn globe-btn--sm" onClick={handleLocate}>
+              ⌾ 定位并标记
+            </button>
+            <button type="button" className="globe-btn globe-btn--sm" onClick={handleClearCoord}>
+              清除蓝点
+            </button>
+          </div>
+          {coordError ? (
+            <p className="globe-coord__error">{coordError}</p>
+          ) : (
+            <p className="globe-actions__hint">定位坐标会以蓝点标注在地球上</p>
+          )}
         </section>
       </aside>
 
@@ -397,7 +490,7 @@ const Index = () => {
       <aside className="globe-panel globe-panel--right">
         <section className="globe-card">
           <h2 className="globe-card__title">
-            <span className="globe-card__index">04</span>实时遥测
+            <span className="globe-card__index">05</span>实时遥测
           </h2>
           <dl className="globe-telemetry">
             <div>
@@ -493,7 +586,7 @@ const Index = () => {
 
         <section className="globe-card globe-card--compact">
           <h2 className="globe-card__title">
-            <span className="globe-card__index">05</span>标记图例
+            <span className="globe-card__index">06</span>标记图例
           </h2>
           <ul className="globe-legend">
             {CATEGORY_ORDER.map((cat) => {

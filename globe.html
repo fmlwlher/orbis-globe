@@ -96,6 +96,18 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
 .g-btn:active{transform:translateY(1px)}
 .g-btn.primary{border-color:var(--g-amber-dim);color:var(--g-amber);background:rgba(255,181,71,.09)}
 .g-btn.primary:hover{border-color:var(--g-amber);box-shadow:0 0 18px -6px var(--g-amber)}
+.axis-hint{color:var(--g-amber);opacity:.72}
+.g-coord{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g-coord-input{width:100%;min-width:0;padding:8px 9px;border:1px solid var(--g-line-strong);border-radius:2px;
+  background:rgba(6,13,26,.72);color:var(--g-text);font-family:var(--g-mono);font-size:11.5px;letter-spacing:.04em;outline:none;
+  transition:border-color .16s ease,box-shadow .16s ease}
+.g-coord-input::placeholder{color:var(--g-text-faint);letter-spacing:.02em}
+.g-coord-input:focus{border-color:var(--g-cyan);box-shadow:0 0 14px -5px var(--g-cyan)}
+.g-coord-input::-webkit-outer-spin-button,.g-coord-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.g-coord-input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.g-coord-actions{display:flex;gap:8px;margin-top:9px}
+.g-coord-actions .g-btn{flex:1 1 0;padding:7px 8px;font-size:10.5px}
+#coordMsg.err{color:#ff8f8f}
 .g-hint{margin:10px 0 0;font-family:var(--g-mono);font-size:9px;line-height:1.7;color:var(--g-text-faint)}
 .g-tel{display:flex;flex-direction:column;margin:0}
 .g-tel>div{display:flex;align-items:baseline;justify-content:space-between;gap:11px;padding:6px 3px;
@@ -208,6 +220,20 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
         <button class="g-btn" id="btnShot">⤓ 导出画面</button>
       </div>
       <p class="g-hint">按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情</p>
+      <p class="g-hint axis-hint">复位后地轴与水平线成 66.5°</p>
+    </section>
+
+    <section class="g-card">
+      <h2><span class="ix">04</span>坐标定位</h2>
+      <div class="g-coord">
+        <input class="g-coord-input" id="inpLat" type="number" step="0.01" placeholder="纬度 -90 ~ 90" aria-label="纬度"/>
+        <input class="g-coord-input" id="inpLng" type="number" step="0.01" placeholder="经度 -180 ~ 180" aria-label="经度"/>
+      </div>
+      <div class="g-actions g-coord-actions">
+        <button class="g-btn" id="btnLocate">⌾ 定位并标记</button>
+        <button class="g-btn" id="btnClearCoord">清除蓝点</button>
+      </div>
+      <p class="g-hint" id="coordMsg">定位坐标会以蓝点标注在地球上</p>
     </section>
   </aside>
 
@@ -482,22 +508,99 @@ const atmo = new THREE.Mesh(
 );
 earthGroup.add(atmo);
 
-/* 经纬网格 */
+/* 经纬网格（总容器 + 五个独立子分组） */
 const grid = new THREE.Group();
-{
-  const mat = new THREE.LineBasicMaterial({ color:0x4de3ff, transparent:true, opacity:.14, depthWrite:false, blending:THREE.AdditiveBlending });
-  const acc = new THREE.LineBasicMaterial({ color:0xffc861, transparent:true, opacity:.32, depthWrite:false, blending:THREE.AdditiveBlending });
-  const r = 1.002;
-  for (let lat=-75; lat<=75; lat+=15){
-    const pts=[]; for(let lng=-180;lng<=180;lng+=3){const v=llToV(lat,lng,r);pts.push(new THREE.Vector3(v.x,v.y,v.z));}
-    grid.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lat===0?acc:mat));
-  }
-  for (let lng=-180; lng<180; lng+=15){
-    const pts=[]; for(let lat=-90;lat<=90;lat+=3){const v=llToV(lat,lng,r);pts.push(new THREE.Vector3(v.x,v.y,v.z));}
-    grid.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lng===0?acc:mat));
-  }
-}
 earthGroup.add(grid);
+
+const circlePts = (kind, val, r, step) => {
+  const pts = [];
+  if (kind === 'parallel') { for (let lng=-180; lng<=180; lng+=step) { const v=llToV(val,lng,r); pts.push(new THREE.Vector3(v.x,v.y,v.z)); } }
+  else { for (let lat=-90; lat<=90; lat+=step) { const v=llToV(lat,val,r); pts.push(new THREE.Vector3(v.x,v.y,v.z)); } }
+  return pts;
+};
+const fmtDeg = (v, kind) => v===0 ? '0°' : `${Math.abs(Math.round(v))}°${kind==='lat' ? (v>0?'N':'S') : (v>0?'E':'W')}`;
+const labelTexCache = new Map();
+const makeLabel = (text, v) => {
+  let t = labelTexCache.get(text);
+  if (!t) {
+    const cv=document.createElement('canvas'); cv.width=96; cv.height=48;
+    const x=cv.getContext('2d');
+    x.font='600 26px "SF Mono", Menlo, Consolas, monospace';
+    x.textAlign='center'; x.textBaseline='middle';
+    x.shadowColor='rgba(0,0,0,0.9)'; x.shadowBlur=6;
+    x.fillStyle='rgba(180,235,255,0.95)'; x.fillText(text,48,25);
+    t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; labelTexCache.set(text,t);
+  }
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false, opacity:.85 }));
+  sp.scale.set(.115,.058,1); sp.position.set(v.x,v.y,v.z);
+  return sp;
+};
+
+{
+  const mat = new THREE.LineBasicMaterial({ color:0x4de3ff, transparent:true, opacity:.16, depthWrite:false, blending:THREE.AdditiveBlending });
+  const acc = new THREE.LineBasicMaterial({ color:0xffc861, transparent:true, opacity:.38, depthWrite:false, blending:THREE.AdditiveBlending });
+  const special = new THREE.LineDashedMaterial({ color:0xffb347, transparent:true, opacity:.6, dashSize:.052, gapSize:.036, depthWrite:false, blending:THREE.AdditiveBlending });
+  const r = 1.002;
+
+  // 经线
+  layerG.meridians = new THREE.Group();
+  for (let lng=-180; lng<180; lng+=15){
+    layerG.meridians.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts('meridian',lng,r,2)), lng===0?acc:mat));
+  }
+  grid.add(layerG.meridians);
+
+  // 经度数值
+  layerG.meridianLabels = new THREE.Group();
+  for (let lng=-180; lng<180; lng+=30){
+    layerG.meridianLabels.add(makeLabel(fmtDeg(lng,'lng'), llToV(-2,lng,r*1.012)));
+    layerG.meridianLabels.add(makeLabel(fmtDeg(lng,'lng'), llToV(2,lng,r*1.012)));
+  }
+  grid.add(layerG.meridianLabels);
+
+  // 纬线 + 回归线/极圈虚线
+  layerG.parallels = new THREE.Group();
+  for (let lat=-75; lat<=75; lat+=15){
+    layerG.parallels.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts('parallel',lat,r,2)), lat===0?acc:mat));
+  }
+  for (const lat of [23.44,-23.44,66.56,-66.56]) {
+    const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts('parallel',lat,r,2)), special);
+    ln.computeLineDistances();
+    layerG.parallels.add(ln);
+  }
+  grid.add(layerG.parallels);
+
+  // 纬度数值
+  layerG.parallelLabels = new THREE.Group();
+  for (let lat=-75; lat<=75; lat+=30){
+    if (lat===0) continue;
+    layerG.parallelLabels.add(makeLabel(fmtDeg(lat,'lat'), llToV(lat,-14,r*1.012)));
+    layerG.parallelLabels.add(makeLabel(fmtDeg(lat,'lat'), llToV(lat,14,r*1.012)));
+  }
+  grid.add(layerG.parallelLabels);
+
+  // 地轴线
+  layerG.axis = new THREE.Group();
+  const axisMat = new THREE.LineBasicMaterial({ color:0xffd591, transparent:true, opacity:.55, depthWrite:false, blending:THREE.AdditiveBlending });
+  layerG.axis.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-1.3,0), new THREE.Vector3(0,1.3,0)]), axisMat));
+  grid.add(layerG.axis);
+}
+
+/* 坐标定位蓝点 */
+const coordPoint = (() => {
+  const S=128, cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const x=cv.getContext('2d'), c=S/2;
+  const g=x.createRadialGradient(c,c,3,c,c,c);
+  g.addColorStop(0,'rgba(74,158,255,0.95)'); g.addColorStop(.4,'rgba(74,158,255,0.30)'); g.addColorStop(1,'rgba(74,158,255,0)');
+  x.fillStyle=g; x.beginPath(); x.arc(c,c,c,0,Math.PI*2); x.fill();
+  x.strokeStyle='rgba(140,205,255,0.9)'; x.lineWidth=4; x.beginPath(); x.arc(c,c,30,0,Math.PI*2); x.stroke();
+  x.fillStyle='#2f86ff'; x.beginPath(); x.arc(c,c,16,0,Math.PI*2); x.fill();
+  x.fillStyle='#cfe6ff'; x.beginPath(); x.arc(c,c,7,0,Math.PI*2); x.fill();
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
+  sp.scale.setScalar(.13); sp.visible=false; earthGroup.add(sp);
+  return sp;
+})();
 
 /* 标记 */
 function markerTex(cat){
@@ -563,21 +666,33 @@ const selRing = (()=>{
 /* ── 状态与交互 ───────────────────────────────────── */
 const MIN_D=1.28, MAX_D=7;
 let tLat=25, tLng=20, cLat=25, cLng=20, dist=3.1, tDist=3.1;
+let axisTilt=90, tAxisTilt=90;
+const layerG = {};
 let dragging=false, moved=false, last={x:0,y:0}, down={x:0,y:0}, vel={lat:0,lng:0};
 let idle=0, autoRot=true, autoActive=true, selected=null;
 let catsOn=[...CAT_ORDER];
-const layers={ satellite:true, grid:true, markers:true, arcs:true, atmosphere:true, stars:true };
+const layers={ satellite:true, grid:true, meridians:true, meridianLabels:true,
+  parallels:true, parallelLabels:true, axis:true, markers:true, arcs:true, atmosphere:true, stars:true };
 const pointers=new Map(); let pinch0=0, pinchD0=0;
 const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
 const clock = new THREE.Clock();
 let reported = 0;
 
-function focusOn(lat,lng,d){
+function focusOn(lat,lng,d,tilt){
   tLat = clamp(lat,-88,88);
   tLng += ((lng - tLng + 540) % 360) - 180;
   if (d !== undefined) tDist = clamp(d, MIN_D, MAX_D);
+  if (tilt !== undefined) tAxisTilt = tilt;
   autoActive = false; idle = -2.4;
 }
+/* 复位：地轴与水平线成 66.5° */
+function resetView(){ vel.lat=0; vel.lng=0; focusOn(25,20,3.1,66.5); }
+/* 经纬度定位并绘制蓝点 */
+function placeCoordPoint(lat,lng){
+  const v=llToV(lat,lng,PLACE_R*1.01);
+  coordPoint.position.set(v.x,v.y,v.z); coordPoint.visible=true; focusOn(lat,lng);
+}
+function clearCoordPoint(){ coordPoint.visible=false; }
 function setSelected(p){
   selected = p;
   if (p){ const v=llToV(p.lat,p.lng,PLACE_R*1.005); selRing.position.set(v.x,v.y,v.z); selRing.visible=true; focusOn(p.lat,p.lng); }
@@ -675,7 +790,10 @@ $('chips').addEventListener('click', e=>{
   $('tMarks').textContent=`${PLACES.filter(p=>catsOn.includes(p.cat)).length} / ${PLACES.length}`;
 });
 const LAYER_DEFS=[
-  ['satellite','卫星影像','真实地表贴图与夜灯'],['grid','经纬网格','15° 间隔参考线'],
+  ['satellite','卫星影像','真实地表贴图与夜灯'],['grid','经纬网格','网格总开关'],
+  ['meridians','经线','每 15° 一条经圈'],['meridianLabels','经度','标注每条经线的经度'],
+  ['parallels','纬线','含回归线与极圈虚线'],['parallelLabels','纬度','标注每条纬线的纬度'],
+  ['axis','地轴线','贯穿南北极的自转轴'],
   ['markers','观测标记','城市 / 地标 / 天文台'],['arcs','航线弧光','以北京为枢纽的连线'],
   ['atmosphere','大气辉光','边缘散射光晕'],['stars','深空星场','远景恒星背景']];
 $('layers').innerHTML=LAYER_DEFS.map(([k,l,h],i)=>`
@@ -685,6 +803,11 @@ $('layers').addEventListener('change', e=>{
   const k=e.target.dataset.k; layers[k]=e.target.checked;
   switch(k){
     case 'grid': grid.visible=layers[k]; break;
+    case 'meridians': layerG.meridians.visible=layers[k]; break;
+    case 'meridianLabels': layerG.meridianLabels.visible=layers[k]; break;
+    case 'parallels': layerG.parallels.visible=layers[k]; break;
+    case 'parallelLabels': layerG.parallelLabels.visible=layers[k]; break;
+    case 'axis': layerG.axis.visible=layers[k]; break;
     case 'markers': break;               // 呼吸循环里按 on 标志处理
     case 'arcs': break;                  // 材质透明度在循环中处理
     case 'atmosphere': atmo.visible=layers[k]; break;
@@ -709,7 +832,23 @@ $('btnRotate').addEventListener('click', ()=>{
   $('btnRotate').textContent = autoRot ? '❙❙ 暂停自转' : '▶ 开启自转';
   $('btnRotate').classList.toggle('primary', autoRot);
 });
-$('btnReset').addEventListener('click', ()=>{ setSelected(null); focusOn(25,20,3.1); idle=0; autoActive=true; });
+$('btnReset').addEventListener('click', ()=>{ setSelected(null); resetView(); idle=0; autoActive=true; });
+
+/* ── 坐标定位交互 ── */
+$('btnLocate').addEventListener('click', ()=>{
+  const lat=parseFloat($('inpLat').value), lng=parseFloat($('inpLng').value);
+  const msg=$('coordMsg');
+  if (!Number.isFinite(lat)||!Number.isFinite(lng)){ msg.textContent='请输入有效的经纬度数值'; msg.classList.add('err'); return; }
+  if (lat<-90||lat>90){ msg.textContent='纬度需在 -90 ~ 90 之间'; msg.classList.add('err'); return; }
+  if (lng<-180||lng>180){ msg.textContent='经度需在 -180 ~ 180 之间'; msg.classList.add('err'); return; }
+  msg.textContent=`已定位 ${Math.abs(lat).toFixed(2)}°${lat>=0?'N':'S'} / ${Math.abs(lng).toFixed(2)}°${lng>=0?'E':'W'}`;
+  msg.classList.remove('err');
+  setSelected(null); placeCoordPoint(lat,lng);
+});
+$('btnClearCoord').addEventListener('click', ()=>{
+  clearCoordPoint();
+  const msg=$('coordMsg'); msg.textContent='定位坐标会以蓝点标注在地球上'; msg.classList.remove('err');
+});
 $('btnShot').addEventListener('click', ()=>{
   renderer.render(scene,camera);
   const a=document.createElement('a'); a.href=renderer.domElement.toDataURL('image/png');
@@ -753,7 +892,22 @@ setInterval(()=>{
 /* ── 主循环 ───────────────────────────────────────── */
 function applyCam(){
   const phi=(90-cLat)*DEG, th=(cLng+180)*DEG;
-  camera.position.set(dist*Math.sin(phi)*Math.cos(th), dist*Math.cos(phi), dist*Math.sin(phi)*Math.sin(th));
+  const px=Math.sin(phi)*Math.cos(th), py=Math.cos(phi), pz=Math.sin(phi)*Math.sin(th);
+  camera.position.set(dist*px, dist*py, dist*pz);
+
+  // 显式构造相机基向量，使地轴投影与屏幕水平线成 axisTilt 夹角
+  const fx=-px, fy=-py, fz=-pz;
+  const d=fy;
+  let ux=-fx*d, uy=1-fy*d, uz=-fz*d;
+  let ul=Math.hypot(ux,uy,uz);
+  if (ul<1e-6){ ux=0; uy=0; uz=1; ul=1; }
+  ux/=ul; uy/=ul; uz/=ul;
+
+  let rx=fy*uz-fz*uy, ry=fz*ux-fx*uz, rz=fx*uy-fy*ux;
+  const rl=Math.hypot(rx,ry,rz)||1; rx/=rl; ry/=rl; rz/=rl;
+
+  const roll=(90-axisTilt)*DEG, cr=Math.cos(roll), sr=Math.sin(roll);
+  camera.up.set(ux*cr+rx*sr, uy*cr+ry*sr, uz*cr+rz*sr);
   camera.lookAt(0,0,0);
 }
 applyCam();
@@ -788,7 +942,7 @@ renderer.setAnimationLoop(()=>{
   }
 
   const sm=1-Math.pow(.0016,dt);
-  cLat+=(tLat-cLat)*sm; cLng+=(tLng-cLng)*sm;
+  cLat+=(tLat-cLat)*sm; cLng+=(tLng-cLng)*sm; axisTilt+=(tAxisTilt-axisTilt)*sm;
   dist+=(tDist-dist)*(1-Math.pow(.0025,dt));
   applyCam();
 

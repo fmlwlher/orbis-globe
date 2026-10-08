@@ -9,6 +9,7 @@ import {
   DEG2RAD,
   PLACE_RADIUS,
   buildArcPoints,
+  formatDegree,
   latLngToVector3,
   vector3ToLatLng,
 } from './geo';
@@ -35,11 +36,27 @@ export interface GlobeOptions {
   onProgress?: (ratio: number) => void;
 }
 
-export type LayerKey = 'satellite' | 'grid' | 'markers' | 'arcs' | 'atmosphere' | 'stars';
+export type LayerKey =
+  | 'satellite'
+  | 'grid'
+  | 'meridians'
+  | 'meridianLabels'
+  | 'parallels'
+  | 'parallelLabels'
+  | 'axis'
+  | 'markers'
+  | 'arcs'
+  | 'atmosphere'
+  | 'stars';
 
 export interface LayerVisibility {
   satellite: boolean;
   grid: boolean;
+  meridians: boolean;
+  meridianLabels: boolean;
+  parallels: boolean;
+  parallelLabels: boolean;
+  axis: boolean;
   markers: boolean;
   arcs: boolean;
   atmosphere: boolean;
@@ -131,10 +148,18 @@ export class GlobeEngine {
   private cloudMesh!: THREE.Mesh<THREE.SphereGeometry, THREE.MeshPhongMaterial>;
   private atmosphereMesh!: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   private gridGroup!: THREE.Group;
+  private meridianGroup!: THREE.Group;
+  private meridianLabelGroup!: THREE.Group;
+  private parallelGroup!: THREE.Group;
+  private parallelLabelGroup!: THREE.Group;
+  private axisGroup!: THREE.Group;
   private markerGroup!: THREE.Group;
   private arcGroup!: THREE.Group;
   private starField!: THREE.Points;
   private selectionRing!: THREE.Sprite;
+  private coordPoint!: THREE.Sprite;
+
+  private labelTextures = new Map<string, THREE.Texture>();
 
   private markerSprites: THREE.Sprite[] = [];
   private markerTextureCache = new Map<Category, THREE.Texture>();
@@ -150,6 +175,13 @@ export class GlobeEngine {
   private currentLng = 20;
   private distance = 3.1;
   private targetDistance = 3.1;
+
+  /**
+   * 地轴倾角模式：地轴（y 轴）投影到屏幕后与水平线的夹角（度）。
+   * 90 = 地轴竖直（常规球坐标视图）；复位视角设置为真实地轴倾角 66.5°。
+   */
+  private axisTiltDeg = 90;
+  private targetAxisTiltDeg = 90;
 
   // —— 交互 ——
   private isDragging = false;
@@ -176,6 +208,11 @@ export class GlobeEngine {
   private layers: LayerVisibility = {
     satellite: true,
     grid: true,
+    meridians: true,
+    meridianLabels: true,
+    parallels: true,
+    parallelLabels: true,
+    axis: true,
     markers: true,
     arcs: true,
     atmosphere: true,
@@ -474,52 +511,224 @@ export class GlobeEngine {
     this.earthGroup.add(this.atmosphereMesh);
   }
 
+  /** 生成一条贴地圆的点集（固定纬度 = 等纬圈；固定经度 = 半大圆） */
+  private buildCirclePoints(kind: 'parallel' | 'meridian', value: number, r: number, step = 2) {
+    const pts: THREE.Vector3[] = [];
+    if (kind === 'parallel') {
+      for (let lng = -180; lng <= 180; lng += step) {
+        const v = latLngToVector3(value, lng, r);
+        pts.push(new THREE.Vector3(v.x, v.y, v.z));
+      }
+    } else {
+      for (let lat = -90; lat <= 90; lat += step) {
+        const v = latLngToVector3(lat, value, r);
+        pts.push(new THREE.Vector3(v.x, v.y, v.z));
+      }
+    }
+    return pts;
+  }
+
   private buildGrid() {
+    // gridGroup 保留为总容器，子分组各自独立控制显隐
     this.gridGroup = new THREE.Group();
     this.gridGroup.renderOrder = 2;
 
     const mat = new THREE.LineBasicMaterial({
       color: 0x4de3ff,
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.16,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
     const accent = new THREE.LineBasicMaterial({
       color: 0xffc861,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.38,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    // 回归线 / 极圈：琥珀色虚线，区别于普通纬线
+    const specialMat = new THREE.LineDashedMaterial({
+      color: 0xffb347,
+      transparent: true,
+      opacity: 0.6,
+      dashSize: 0.052,
+      gapSize: 0.036,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
 
     const r = EARTH_RADIUS * 1.002;
 
-    // 纬线
-    for (let lat = -75; lat <= 75; lat += 15) {
-      const isEquator = lat === 0;
-      const pts: THREE.Vector3[] = [];
-      for (let lng = -180; lng <= 180; lng += 3) {
-        const v = latLngToVector3(lat, lng, r);
-        pts.push(new THREE.Vector3(v.x, v.y, v.z));
-      }
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      this.gridGroup.add(new THREE.Line(geo, isEquator ? accent : mat));
-    }
-
-    // 经线
+    // ── 经线（360° 全经圈）──
+    this.meridianGroup = new THREE.Group();
     for (let lng = -180; lng < 180; lng += 15) {
-      const isPrime = lng === 0;
-      const pts: THREE.Vector3[] = [];
-      for (let lat = -90; lat <= 90; lat += 3) {
-        const v = latLngToVector3(lat, lng, r);
-        pts.push(new THREE.Vector3(v.x, v.y, v.z));
-      }
+      const pts = this.buildCirclePoints('meridian', lng, r);
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      this.gridGroup.add(new THREE.Line(geo, isPrime ? accent : mat));
+      this.meridianGroup.add(new THREE.Line(geo, lng === 0 ? accent : mat));
     }
+    this.gridGroup.add(this.meridianGroup);
+
+    // ── 经度数值标注 ──
+    this.meridianLabelGroup = new THREE.Group();
+    for (let lng = -180; lng < 180; lng += 30) {
+      this.meridianLabelGroup.add(
+        this.makeLabelSprite(formatDegree(lng, 'lng'), latLngToVector3(-2, lng, r * 1.012))
+      );
+      this.meridianLabelGroup.add(
+        this.makeLabelSprite(formatDegree(lng, 'lng'), latLngToVector3(2, lng, r * 1.012))
+      );
+    }
+    this.gridGroup.add(this.meridianLabelGroup);
+
+    // ── 纬线（含赤道）──
+    this.parallelGroup = new THREE.Group();
+    for (let lat = -75; lat <= 75; lat += 15) {
+      const pts = this.buildCirclePoints('parallel', lat, r);
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      this.parallelGroup.add(new THREE.Line(geo, lat === 0 ? accent : mat));
+    }
+    // ── 回归线（±23.44°）与极圈（±66.56°）：虚线 ──
+    for (const lat of [23.44, -23.44, 66.56, -66.56]) {
+      const pts = this.buildCirclePoints('parallel', lat, r);
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(geo, specialMat);
+      line.computeLineDistances(); // 虚线必需
+      this.parallelGroup.add(line);
+    }
+    this.gridGroup.add(this.parallelGroup);
+
+    // ── 纬度数值标注 ──
+    this.parallelLabelGroup = new THREE.Group();
+    for (let lat = -75; lat <= 75; lat += 30) {
+      if (lat === 0) continue;
+      this.parallelLabelGroup.add(
+        this.makeLabelSprite(formatDegree(lat, 'lat'), latLngToVector3(lat, -14, r * 1.012))
+      );
+      this.parallelLabelGroup.add(
+        this.makeLabelSprite(formatDegree(lat, 'lat'), latLngToVector3(lat, 14, r * 1.012))
+      );
+    }
+    this.gridGroup.add(this.parallelLabelGroup);
+
+    // ── 地轴线（穿过南北极并向外延伸）──
+    this.axisGroup = new THREE.Group();
+    const axisMat = new THREE.LineBasicMaterial({
+      color: 0xffd591,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const axisR = EARTH_RADIUS * 1.3;
+    const axisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, -axisR, 0),
+      new THREE.Vector3(0, axisR, 0),
+    ]);
+    this.axisGroup.add(new THREE.Line(axisGeo, axisMat));
+    this.gridGroup.add(this.axisGroup);
 
     this.atmosphereMesh.parent?.add(this.gridGroup);
+
+    this.buildCoordPoint();
+  }
+
+  /** 生成一个文字标签精灵（用于经纬度数值） */
+  private makeLabelSprite(text: string, v: { x: number; y: number; z: number }) {
+    let tex = this.labelTextures.get(text);
+    if (!tex) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 96;
+      canvas.height = 48;
+      const ctx = canvas.getContext('2d')!;
+      ctx.font = '600 26px "SF Mono", Menlo, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = 'rgba(180,235,255,0.95)';
+      ctx.fillText(text, 48, 25);
+
+      tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.labelTextures.set(text, tex);
+    }
+
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.85,
+      })
+    );
+    sprite.scale.set(0.115, 0.058, 1);
+    sprite.position.set(v.x, v.y, v.z);
+    return sprite;
+  }
+
+  /** 用户输入定位后显示的蓝点 */
+  private buildCoordPoint() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+    const c = 64;
+
+    // 外发光
+    const grad = ctx.createRadialGradient(c, c, 3, c, c, c);
+    grad.addColorStop(0, 'rgba(74,158,255,0.95)');
+    grad.addColorStop(0.4, 'rgba(74,158,255,0.30)');
+    grad.addColorStop(1, 'rgba(74,158,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(c, c, c, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 定位环
+    ctx.strokeStyle = 'rgba(140,205,255,0.9)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(c, c, 30, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 实心蓝点
+    ctx.fillStyle = '#2f86ff';
+    ctx.beginPath();
+    ctx.arc(c, c, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#cfe6ff';
+    ctx.beginPath();
+    ctx.arc(c, c, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+
+    this.coordPoint = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 1,
+      })
+    );
+    this.coordPoint.scale.setScalar(0.13);
+    this.coordPoint.visible = false;
+    this.earthGroup.add(this.coordPoint);
+  }
+
+  /** 在指定经纬度放置蓝点并飞过去 */
+  placeCoordPoint(lat: number, lng: number) {
+    const v = latLngToVector3(lat, lng, PLACE_RADIUS * 1.01);
+    this.coordPoint.position.set(v.x, v.y, v.z);
+    this.coordPoint.visible = true;
+    this.focusOn(lat, lng);
+  }
+
+  clearCoordPoint() {
+    this.coordPoint.visible = false;
   }
 
   private buildMarkers() {
@@ -806,7 +1015,7 @@ export class GlobeEngine {
 
   // ── 公开 API ────────────────────────────────────────────
 
-  focusOn(lat: number, lng: number, distance?: number) {
+  focusOn(lat: number, lng: number, distance?: number, axisTiltDeg?: number) {
     this.targetLat = clamp(lat, -88, 88);
     // 选择最短路径旋转
     const current = this.targetLng;
@@ -814,8 +1023,19 @@ export class GlobeEngine {
     this.targetLng = current + delta;
 
     if (distance !== undefined) this.setDistance(distance);
+    if (axisTiltDeg !== undefined) this.targetAxisTiltDeg = axisTiltDeg;
     this.autoRotateActive = false;
     this.userIdleTimer = -2.4; // 聚焦后延迟更久再自动旋转
+  }
+
+  /**
+   * 复位到默认观测姿态：地轴与水平线成 66.5°（地球真实黄赤交角姿态）。
+   * 66.5° 是从地轴任意一侧量起都成立的夹角（90° - 23.5° = 66.5°）。
+   */
+  resetView() {
+    this.velocity.lat = 0;
+    this.velocity.lng = 0;
+    this.focusOn(25, 20, 3.1, 66.5);
   }
 
   setSelected(place: Place | null) {
@@ -845,6 +1065,21 @@ export class GlobeEngine {
     switch (key) {
       case 'grid':
         this.gridGroup.visible = visible;
+        break;
+      case 'meridians':
+        this.meridianGroup.visible = visible;
+        break;
+      case 'meridianLabels':
+        this.meridianLabelGroup.visible = visible;
+        break;
+      case 'parallels':
+        this.parallelGroup.visible = visible;
+        break;
+      case 'parallelLabels':
+        this.parallelLabelGroup.visible = visible;
+        break;
+      case 'axis':
+        this.axisGroup.visible = visible;
         break;
       case 'markers':
         this.markerGroup.visible = visible;
@@ -887,17 +1122,61 @@ export class GlobeEngine {
   private applyCameras(immediate = false) {
     const lat = immediate ? this.targetLat : this.currentLat;
     const lng = immediate ? this.targetLng : this.currentLng;
+    const tilt = immediate ? this.targetAxisTiltDeg : this.axisTiltDeg;
 
     const phi = (90 - lat) * DEG2RAD;
     const theta = (lng + 180) * DEG2RAD;
 
-    this.camera.position.set(
-      this.distance * Math.sin(phi) * Math.cos(theta),
-      this.distance * Math.cos(phi),
-      this.distance * Math.sin(phi) * Math.sin(theta)
-    );
+    const px = Math.sin(phi) * Math.cos(theta);
+    const py = Math.cos(phi);
+    const pz = Math.sin(phi) * Math.sin(theta);
+
+    this.camera.position.set(this.distance * px, this.distance * py, this.distance * pz);
+
+    // ── 显式构造相机基向量，使「地轴投影」与屏幕水平线成 tilt 夹角 ──
+    // 不用 lookAt 的自动正交化：那样会把 up 重新投影，导致倾角无法精确控制。
+    // fwd  = 视线方向（指向球心）
+    const fx = -px;
+    const fy = -py;
+    const fz = -pz;
+
+    // 屏幕竖直基准 = 世界 y 轴（地轴）在垂直视线平面上的投影
+    const d = fy; // worldY · fwd
+    let ux = -fx * d;
+    let uy = 1 - fy * d;
+    let uz = -fz * d;
+    let ul = Math.sqrt(ux * ux + uy * uy + uz * uz);
+    if (ul < 1e-6) {
+      // 视线与地轴平行时的退化保护（正对极点）
+      ux = 0;
+      uy = 0;
+      uz = 1;
+      ul = 1;
+    }
+    ux /= ul;
+    uy /= ul;
+    uz /= ul;
+
+    // 屏幕水平基准 = fwd × up
+    let rx = fy * uz - fz * uy;
+    let ry = fz * ux - fx * uz;
+    let rz = fx * uy - fy * ux;
+    const rl = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1;
+    rx /= rl;
+    ry /= rl;
+    rz /= rl;
+
+    // 绕视线轴旋转 (90° - tilt)：使地轴与屏幕水平线夹角恰为 tilt
+    const roll = (90 - tilt) * DEG2RAD;
+    const cr = Math.cos(roll);
+    const sr = Math.sin(roll);
+
+    const upx = ux * cr + rx * sr;
+    const upy = uy * cr + ry * sr;
+    const upz = uz * cr + rz * sr;
+
+    this.camera.up.set(upx, upy, upz);
     this.camera.lookAt(0, 0, 0);
-    this.camera.up.set(0, 1, 0);
   }
 
   private reportState(force = false) {
@@ -953,6 +1232,7 @@ export class GlobeEngine {
     const smooth = 1 - Math.pow(0.0016, dt);
     this.currentLat += (this.targetLat - this.currentLat) * smooth;
     this.currentLng += (this.targetLng - this.currentLng) * smooth;
+    this.axisTiltDeg += (this.targetAxisTiltDeg - this.axisTiltDeg) * smooth;
     this.distance += (this.targetDistance - this.distance) * (1 - Math.pow(0.0025, dt));
 
     this.applyCameras();

@@ -107,3 +107,10 @@ export function formatDistance(km: number): string {
   if (km < 1) return `${(km * 1000).toFixed(0)} m`;
   return `${km.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} km`;
 }
+
+/** 经纬度数值的紧凑标签，用于网格度数标注（12°N / 105°E） */
+export function formatDegree(value: number, kind: 'lat' | 'lng'): string {
+  if (value === 0) return '0°';
+  const dir = kind === 'lat' ? (value > 0 ? 'N' : 'S') : value > 0 ? 'E' : 'W';
+  return `${Math.abs(Math.round(value))}°${dir}`;
+}
