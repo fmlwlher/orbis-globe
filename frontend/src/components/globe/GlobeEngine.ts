@@ -1029,13 +1029,13 @@ export class GlobeEngine {
   }
 
   /**
-   * 复位到默认观测姿态：地轴与水平线成 66.5°（地球真实黄赤交角姿态）。
-   * 66.5° 是从地轴任意一侧量起都成立的夹角（90° - 23.5° = 66.5°）。
+   * 复位到默认观测姿态：地轴与水平线成 66.5°，且向右倾斜（北端偏右）。
+   * 113.5° = 180° - 66.5°，与 66.5° 是镜像关系，夹角相同但倾斜方向相反。
    */
   resetView() {
     this.velocity.lat = 0;
     this.velocity.lng = 0;
-    this.focusOn(25, 20, 3.1, 66.5);
+    this.focusOn(25, 20, 3.1, 113.5);
   }
 
   setSelected(place: Place | null) {

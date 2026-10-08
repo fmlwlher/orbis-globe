@@ -13,7 +13,14 @@ import {
   type Category,
   type Place,
 } from '@/components/globe/places';
-import { formatDistance, formatLatLng, greatCircleDistance } from '@/components/globe/geo';
+import {
+  formatDistance,
+  formatLatLng,
+  greatCircleDistance,
+  parseLatitude,
+  parseLongitude,
+  toCoordInput,
+} from '@/components/globe/geo';
 import './globe.css';
 
 const CATEGORY_ORDER: Category[] = [
@@ -195,26 +202,26 @@ const Index = () => {
 
   /** 输入经纬度定位，并在该坐标绘制蓝点 */
   const handleLocate = () => {
-    const lat = Number.parseFloat(coordInput.lat);
-    const lng = Number.parseFloat(coordInput.lng);
+    const latParsed = parseLatitude(coordInput.lat);
+    if (latParsed.value === undefined) {
+      setCoordError(latParsed.error ?? '纬度无效');
+      return;
+    }
+    const lngParsed = parseLongitude(coordInput.lng);
+    if (lngParsed.value === undefined) {
+      setCoordError(lngParsed.error ?? '经度无效');
+      return;
+    }
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setCoordError('请输入有效的经纬度数值');
-      return;
-    }
-    if (lat < -90 || lat > 90) {
-      setCoordError('纬度需在 -90 ~ 90 之间');
-      return;
-    }
-    if (lng < -180 || lng > 180) {
-      setCoordError('经度需在 -180 ~ 180 之间');
-      return;
-    }
+    const lat = latParsed.value;
+    const lng = lngParsed.value;
 
     setCoordError('');
     engineRef.current?.setSelected(null);
     engineRef.current?.placeCoordPoint(lat, lng);
-    setCoordInput({ lat: String(lat), lng: String(lng) });
+    // 回填规范化后的格式，便于确认解析结果
+    const normalized = toCoordInput(lat, lng);
+    setCoordInput(normalized);
   };
 
   const handleClearCoord = () => {
@@ -438,7 +445,7 @@ const Index = () => {
             按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情
           </p>
           <p className="globe-actions__hint globe-actions__hint--axis">
-            复位后地轴与水平线成 66.5°
+            复位后地轴与水平线成 66.5°，向右倾斜
           </p>
         </section>
 
@@ -449,10 +456,11 @@ const Index = () => {
           <div className="globe-coord">
             <input
               className="globe-coord__input"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              placeholder="纬度 -90 ~ 90"
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="纬度 如 30N / 30S"
               aria-label="纬度"
               value={coordInput.lat}
               onChange={(e) => setCoordInput((p) => ({ ...p, lat: e.target.value }))}
@@ -460,10 +468,11 @@ const Index = () => {
             />
             <input
               className="globe-coord__input"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              placeholder="经度 -180 ~ 180"
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="经度 如 45E / 45W"
               aria-label="经度"
               value={coordInput.lng}
               onChange={(e) => setCoordInput((p) => ({ ...p, lng: e.target.value }))}
@@ -481,7 +490,9 @@ const Index = () => {
           {coordError ? (
             <p className="globe-coord__error">{coordError}</p>
           ) : (
-            <p className="globe-actions__hint">定位坐标会以蓝点标注在地球上</p>
+            <p className="globe-actions__hint">
+              数字 + 方向字母（N/S 纬度，E/W 经度），如 30N / 45W
+            </p>
           )}
         </section>
       </aside>

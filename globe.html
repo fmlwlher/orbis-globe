@@ -220,20 +220,20 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
         <button class="g-btn" id="btnShot">⤓ 导出画面</button>
       </div>
       <p class="g-hint">按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情</p>
-      <p class="g-hint axis-hint">复位后地轴与水平线成 66.5°</p>
+      <p class="g-hint axis-hint">复位后地轴与水平线成 66.5°，向右倾斜</p>
     </section>
 
     <section class="g-card">
       <h2><span class="ix">04</span>坐标定位</h2>
       <div class="g-coord">
-        <input class="g-coord-input" id="inpLat" type="number" step="0.01" placeholder="纬度 -90 ~ 90" aria-label="纬度"/>
-        <input class="g-coord-input" id="inpLng" type="number" step="0.01" placeholder="经度 -180 ~ 180" aria-label="经度"/>
+        <input class="g-coord-input" id="inpLat" type="text" autocomplete="off" spellcheck="false" placeholder="纬度 如 30N / 30S" aria-label="纬度"/>
+        <input class="g-coord-input" id="inpLng" type="text" autocomplete="off" spellcheck="false" placeholder="经度 如 45E / 45W" aria-label="经度"/>
       </div>
       <div class="g-actions g-coord-actions">
         <button class="g-btn" id="btnLocate">⌾ 定位并标记</button>
         <button class="g-btn" id="btnClearCoord">清除蓝点</button>
       </div>
-      <p class="g-hint" id="coordMsg">定位坐标会以蓝点标注在地球上</p>
+      <p class="g-hint" id="coordMsg">数字 + 方向字母（N/S 纬度，E/W 经度），如 30N / 45W</p>
     </section>
   </aside>
 
@@ -685,8 +685,8 @@ function focusOn(lat,lng,d,tilt){
   if (tilt !== undefined) tAxisTilt = tilt;
   autoActive = false; idle = -2.4;
 }
-/* 复位：地轴与水平线成 66.5° */
-function resetView(){ vel.lat=0; vel.lng=0; focusOn(25,20,3.1,66.5); }
+/* 复位：地轴与水平线成 66.5° 且向右倾斜（113.5 = 180 - 66.5） */
+function resetView(){ vel.lat=0; vel.lng=0; focusOn(25,20,3.1,113.5); }
 /* 经纬度定位并绘制蓝点 */
 function placeCoordPoint(lat,lng){
   const v=llToV(lat,lng,PLACE_R*1.01);
@@ -834,20 +834,56 @@ $('btnRotate').addEventListener('click', ()=>{
 });
 $('btnReset').addEventListener('click', ()=>{ setSelected(null); resetView(); idle=0; autoActive=true; });
 
-/* ── 坐标定位交互 ── */
-$('btnLocate').addEventListener('click', ()=>{
-  const lat=parseFloat($('inpLat').value), lng=parseFloat($('inpLng').value);
-  const msg=$('coordMsg');
-  if (!Number.isFinite(lat)||!Number.isFinite(lng)){ msg.textContent='请输入有效的经纬度数值'; msg.classList.add('err'); return; }
-  if (lat<-90||lat>90){ msg.textContent='纬度需在 -90 ~ 90 之间'; msg.classList.add('err'); return; }
-  if (lng<-180||lng>180){ msg.textContent='经度需在 -180 ~ 180 之间'; msg.classList.add('err'); return; }
-  msg.textContent=`已定位 ${Math.abs(lat).toFixed(2)}°${lat>=0?'N':'S'} / ${Math.abs(lng).toFixed(2)}°${lng>=0?'E':'W'}`;
+/* ── 坐标定位交互（支持 数字+方向字母 格式） ── */
+/* 解析 30N/30S/30n/30°N 等写法；不带字母时正数为北纬、负数为南纬 */
+function parseAxis(text, kind){
+  const posDir = kind==='lat' ? 'N' : 'E';
+  const negDir = kind==='lat' ? 'S' : 'W';
+  const label  = kind==='lat' ? '纬度' : '经度';
+  const limit  = kind==='lat' ? 90 : 180;
+  const str = String(text||'').trim();
+  if (!str) return { error: `请输入${label}` };
+  const m = str.match(/^([+-]?)(\d+(?:\.\d+)?)\s*°?\s*([NSEWnsew])?$/);
+  if (!m) return { error: `${label}格式应为数字+${posDir}/${negDir}，如 30${posDir}` };
+  const magnitude = parseFloat(m[2]);
+  if (!Number.isFinite(magnitude)) return { error: `${label}数值无效` };
+  let value = magnitude;
+  if (m[3]) {
+    const upper = m[3].toUpperCase();
+    if (upper !== posDir && upper !== negDir) return { error: `${label}方向字母应为 ${posDir} 或 ${negDir}` };
+    if (upper === negDir) value = -value;
+  } else if (m[1] === '-') {
+    value = -value;
+  }
+  if (value < -limit || value > limit) return { error: `${label}需在 -${limit} ~ ${limit} 之间` };
+  return { value };
+}
+const coordHint = '数字 + 方向字母（N/S 纬度，E/W 经度），如 30N / 45W';
+function toCoordText(v, pos, neg){
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  return `${Number.isInteger(a) ? a : a.toFixed(2).replace(/\.?0+$/, '')}${v>0?pos:neg}`;
+}
+function doLocate(){
+  const msg = $('coordMsg');
+  const la = parseAxis($('inpLat').value, 'lat');
+  if (la.error){ msg.textContent = la.error; msg.classList.add('err'); return; }
+  const ln = parseAxis($('inpLng').value, 'lng');
+  if (ln.error){ msg.textContent = ln.error; msg.classList.add('err'); return; }
+  const lat = la.value, lng = ln.value;
+  msg.textContent = `已定位 ${toCoordText(lat,'N','S')} / ${toCoordText(lng,'E','W')}`;
   msg.classList.remove('err');
-  setSelected(null); placeCoordPoint(lat,lng);
-});
+  // 回填规范化格式，便于确认解析结果
+  $('inpLat').value = toCoordText(lat,'N','S');
+  $('inpLng').value = toCoordText(lng,'E','W');
+  setSelected(null); placeCoordPoint(lat, lng);
+}
+$('btnLocate').addEventListener('click', doLocate);
+$('inpLat').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
+$('inpLng').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
 $('btnClearCoord').addEventListener('click', ()=>{
   clearCoordPoint();
-  const msg=$('coordMsg'); msg.textContent='定位坐标会以蓝点标注在地球上'; msg.classList.remove('err');
+  const msg=$('coordMsg'); msg.textContent=coordHint; msg.classList.remove('err');
 });
 $('btnShot').addEventListener('click', ()=>{
   renderer.render(scene,camera);

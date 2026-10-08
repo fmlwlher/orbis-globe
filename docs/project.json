@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Add meridian/parallel/label/axis toggles, tropic & polar circle dashed lines, 66.5 axis reset, lat-lng coordinate locator",
+  "version_description": "Support N/S/E/W coordinate input format and tilt axis right",
   "preview_type": "pc"
 }
