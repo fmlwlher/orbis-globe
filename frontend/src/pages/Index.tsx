@@ -16,7 +16,13 @@ import {
 import { formatDistance, formatLatLng, greatCircleDistance } from '@/components/globe/geo';
 import './globe.css';
 
-const CATEGORY_ORDER: Category[] = ['capital', 'metropolis', 'landmark', 'observatory'];
+const CATEGORY_ORDER: Category[] = [
+  'capital',
+  'chnCapital',
+  'metropolis',
+  'landmark',
+  'observatory',
+];
 
 const LAYER_LABELS: { key: LayerKey; label: string; hint: string }[] = [
   { key: 'satellite', label: '卫星影像', hint: '真实地表贴图与夜灯' },

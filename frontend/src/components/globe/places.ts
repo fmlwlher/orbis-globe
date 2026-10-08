@@ -3,7 +3,12 @@
  * 用于地球仪上的标记点、观测站列表与航线演示
  */
 
-export type Category = 'capital' | 'metropolis' | 'landmark' | 'observatory';
+export type Category =
+  | 'capital'
+  | 'metropolis'
+  | 'landmark'
+  | 'observatory'
+  | 'chnCapital';
 
 export interface Place {
   id: string;
@@ -47,6 +52,12 @@ export const CATEGORY_META: Record<
     color: '#a78bfa',
     glow: 'rgba(167,139,250,0.5)',
     glyph: '✦',
+  },
+  chnCapital: {
+    label: '中国省会',
+    color: '#ff4d7d',
+    glow: 'rgba(255,77,125,0.55)',
+    glyph: '⬟',
   },
 };
 
@@ -97,6 +108,52 @@ export const PLACES: Place[] = [
   { id: 'fast', name: 'FAST 天眼', nameEn: 'FAST Radio Telescope', country: '中国 · 贵州', lat: 25.6529, lng: 106.8563, category: 'observatory', weight: 0.6, timezone: 'Asia/Shanghai', note: '世界最大单口径射电望远镜' },
   { id: 'paranal', name: '帕瑞纳天文台', nameEn: 'Paranal Observatory', country: '智利', lat: -24.6272, lng: -70.4042, category: 'observatory', weight: 0.55, timezone: 'America/Santiago', altitude: 2635 },
   { id: 'calaralto', name: '卡拉阿托天文台', nameEn: 'Calar Alto Observatory', country: '西班牙', lat: 37.2236, lng: -2.5461, category: 'observatory', weight: 0.45, timezone: 'Europe/Madrid', altitude: 2168 },
+
+  // ── 中国省会 / 直辖市 / 特别行政区 ────────────────────────
+  // 华北
+  { id: 'shijiazhuang', name: '石家庄', nameEn: 'Shijiazhuang', country: '中国 · 河北', lat: 38.0428, lng: 114.5149, category: 'chnCapital', weight: 0.62, timezone: 'Asia/Shanghai', note: '河北省会' },
+  { id: 'taiyuan', name: '太原', nameEn: 'Taiyuan', country: '中国 · 山西', lat: 37.8706, lng: 112.5489, category: 'chnCapital', weight: 0.6, timezone: 'Asia/Shanghai', note: '山西省会' },
+  { id: 'hohhot', name: '呼和浩特', nameEn: 'Hohhot', country: '中国 · 内蒙古', lat: 40.8426, lng: 111.7492, category: 'chnCapital', weight: 0.55, timezone: 'Asia/Shanghai', note: '内蒙古自治区首府' },
+  { id: 'tianjin', name: '天津', nameEn: 'Tianjin', country: '中国 · 直辖市', lat: 39.0842, lng: 117.2009, category: 'chnCapital', weight: 0.78, timezone: 'Asia/Shanghai', note: '直辖市 · 北方重要港口' },
+
+  // 东北
+  { id: 'shenyang', name: '沈阳', nameEn: 'Shenyang', country: '中国 · 辽宁', lat: 41.8057, lng: 123.4315, category: 'chnCapital', weight: 0.65, timezone: 'Asia/Shanghai', note: '辽宁省会' },
+  { id: 'changchun', name: '长春', nameEn: 'Changchun', country: '中国 · 吉林', lat: 43.8171, lng: 125.3235, category: 'chnCapital', weight: 0.6, timezone: 'Asia/Shanghai', note: '吉林省会' },
+  { id: 'harbin', name: '哈尔滨', nameEn: 'Harbin', country: '中国 · 黑龙江', lat: 45.8038, lng: 126.534, category: 'chnCapital', weight: 0.63, timezone: 'Asia/Shanghai', note: '黑龙江省会 · 冰城' },
+
+  // 华东
+  { id: 'nanjing', name: '南京', nameEn: 'Nanjing', country: '中国 · 江苏', lat: 32.0603, lng: 118.7969, category: 'chnCapital', weight: 0.72, timezone: 'Asia/Shanghai', note: '江苏省会 · 六朝古都' },
+  { id: 'hangzhou', name: '杭州', nameEn: 'Hangzhou', country: '中国 · 浙江', lat: 30.2741, lng: 120.1551, category: 'chnCapital', weight: 0.74, timezone: 'Asia/Shanghai', note: '浙江省会' },
+  { id: 'hefei', name: '合肥', nameEn: 'Hefei', country: '中国 · 安徽', lat: 31.8206, lng: 117.2272, category: 'chnCapital', weight: 0.6, timezone: 'Asia/Shanghai', note: '安徽省会' },
+  { id: 'fuzhou', name: '福州', nameEn: 'Fuzhou', country: '中国 · 福建', lat: 26.0745, lng: 119.2965, category: 'chnCapital', weight: 0.58, timezone: 'Asia/Shanghai', note: '福建省会' },
+  { id: 'nanchang', name: '南昌', nameEn: 'Nanchang', country: '中国 · 江西', lat: 28.682, lng: 115.8579, category: 'chnCapital', weight: 0.57, timezone: 'Asia/Shanghai', note: '江西省会' },
+  { id: 'jinan', name: '济南', nameEn: 'Jinan', country: '中国 · 山东', lat: 36.6512, lng: 117.1201, category: 'chnCapital', weight: 0.63, timezone: 'Asia/Shanghai', note: '山东省会 · 泉城' },
+  { id: 'taipei', name: '中国台北', nameEn: 'Taipei, China', country: '中国 · 台湾', lat: 25.033, lng: 121.5654, category: 'chnCapital', weight: 0.66, timezone: 'Asia/Taipei', note: '台湾地区行政中心' },
+
+  // 华中
+  { id: 'zhengzhou', name: '郑州', nameEn: 'Zhengzhou', country: '中国 · 河南', lat: 34.7466, lng: 113.6254, category: 'chnCapital', weight: 0.65, timezone: 'Asia/Shanghai', note: '河南省会 · 中原枢纽' },
+  { id: 'wuhan', name: '武汉', nameEn: 'Wuhan', country: '中国 · 湖北', lat: 30.5928, lng: 114.3055, category: 'chnCapital', weight: 0.7, timezone: 'Asia/Shanghai', note: '湖北省会 · 九省通衢' },
+  { id: 'changsha', name: '长沙', nameEn: 'Changsha', country: '中国 · 湖南', lat: 28.2282, lng: 112.9388, category: 'chnCapital', weight: 0.62, timezone: 'Asia/Shanghai', note: '湖南省会' },
+
+  // 华南
+  { id: 'guangzhou', name: '广州', nameEn: 'Guangzhou', country: '中国 · 广东', lat: 23.1291, lng: 113.2644, category: 'chnCapital', weight: 0.85, timezone: 'Asia/Shanghai', note: '广东省会 · 千年商都' },
+  { id: 'nanning', name: '南宁', nameEn: 'Nanning', country: '中国 · 广西', lat: 22.817, lng: 108.3665, category: 'chnCapital', weight: 0.55, timezone: 'Asia/Shanghai', note: '广西壮族自治区首府' },
+  { id: 'haikou', name: '海口', nameEn: 'Haikou', country: '中国 · 海南', lat: 20.0444, lng: 110.1999, category: 'chnCapital', weight: 0.5, timezone: 'Asia/Shanghai', note: '海南省会' },
+  { id: 'macao', name: '中国澳门', nameEn: 'Macao, China', country: '中国 · 特别行政区', lat: 22.1987, lng: 113.5439, category: 'chnCapital', weight: 0.52, timezone: 'Asia/Macau', note: '特别行政区' },
+
+  // 西南
+  { id: 'chengdu', name: '成都', nameEn: 'Chengdu', country: '中国 · 四川', lat: 30.5728, lng: 104.0668, category: 'chnCapital', weight: 0.72, timezone: 'Asia/Shanghai', note: '四川省会 · 天府之国' },
+  { id: 'chongqing', name: '重庆', nameEn: 'Chongqing', country: '中国 · 直辖市', lat: 29.563, lng: 106.5516, category: 'chnCapital', weight: 0.76, timezone: 'Asia/Shanghai', note: '直辖市 · 山城' },
+  { id: 'guiyang', name: '贵阳', nameEn: 'Guiyang', country: '中国 · 贵州', lat: 26.647, lng: 106.6302, category: 'chnCapital', weight: 0.55, timezone: 'Asia/Shanghai', note: '贵州省会 · 大数据之都' },
+  { id: 'kunming', name: '昆明', nameEn: 'Kunming', country: '中国 · 云南', lat: 25.0389, lng: 102.7183, category: 'chnCapital', weight: 0.58, timezone: 'Asia/Shanghai', note: '云南省会 · 春城' },
+  { id: 'lhasa', name: '拉萨', nameEn: 'Lhasa', country: '中国 · 西藏', lat: 29.652, lng: 91.1721, category: 'chnCapital', weight: 0.5, timezone: 'Asia/Shanghai', altitude: 3650, note: '西藏自治区首府 · 世界海拔最高首府之一' },
+
+  // 西北
+  { id: 'xian', name: '西安', nameEn: "Xi'an", country: '中国 · 陕西', lat: 34.3416, lng: 108.9398, category: 'chnCapital', weight: 0.68, timezone: 'Asia/Shanghai', note: '陕西省会 · 十三朝古都' },
+  { id: 'lanzhou', name: '兰州', nameEn: 'Lanzhou', country: '中国 · 甘肃', lat: 36.0611, lng: 103.8343, category: 'chnCapital', weight: 0.53, timezone: 'Asia/Shanghai', note: '甘肃省会 · 黄河穿城而过' },
+  { id: 'xining', name: '西宁', nameEn: 'Xining', country: '中国 · 青海', lat: 36.6171, lng: 101.7782, category: 'chnCapital', weight: 0.48, timezone: 'Asia/Shanghai', altitude: 2261, note: '青海省会 · 青藏门户' },
+  { id: 'yinchuan', name: '银川', nameEn: 'Yinchuan', country: '中国 · 宁夏', lat: 38.4872, lng: 106.2309, category: 'chnCapital', weight: 0.47, timezone: 'Asia/Shanghai', note: '宁夏回族自治区首府' },
+  { id: 'urumqi', name: '乌鲁木齐', nameEn: 'Ürümqi', country: '中国 · 新疆', lat: 43.8256, lng: 87.6168, category: 'chnCapital', weight: 0.55, timezone: 'Asia/Shanghai', note: '新疆维吾尔自治区首府 · 距海最远的城市' },
 ];
 
 export const HUB_PLACE = PLACES.find((p) => p.id === 'beijing')!;

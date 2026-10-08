@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Build interactive 3D globe with drag rotate and zoom",
+  "version_description": "Add GitHub Pages deployment with subpath support",
   "preview_type": "pc"
 }

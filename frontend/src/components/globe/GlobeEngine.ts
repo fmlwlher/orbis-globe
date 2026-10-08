@@ -51,7 +51,13 @@ const MIN_DISTANCE = 1.28;
 const MAX_DISTANCE = 7.0;
 
 /** 全部分类（用于过滤默认值） */
-const CATEGORY_ALL: Category[] = ['capital', 'metropolis', 'landmark', 'observatory'];
+const CATEGORY_ALL: Category[] = [
+  'capital',
+  'chnCapital',
+  'metropolis',
+  'landmark',
+  'observatory',
+];
 
 /** 探测当前环境是否支持 WebGL */
 export function isWebGLAvailable(): boolean {
