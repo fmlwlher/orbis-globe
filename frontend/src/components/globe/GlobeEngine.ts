@@ -300,8 +300,13 @@ export class GlobeEngine {
     const loader = new THREE.TextureLoader(this.loadingManager);
     const maxAniso = this.renderer.capabilities.getMaxAnisotropy();
 
+    // 使用 BASE_URL 拼接，兼容 GitHub Pages 的子路径部署（如 /orbis-globe/）
+    const base = import.meta.env.BASE_URL.endsWith('/')
+      ? import.meta.env.BASE_URL
+      : `${import.meta.env.BASE_URL}/`;
+
     const load = (file: string, srgb = true) => {
-      const tex = loader.load(`/textures/${file}`);
+      const tex = loader.load(`${base}textures/${file}`);
       if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = maxAniso;
       return tex;

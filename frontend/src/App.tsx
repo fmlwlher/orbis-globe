@@ -36,7 +36,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <BrowserRouter>
+        {/* basename 跟随 Vite 的 base，保证子路径部署（如 GitHub Pages /orbis-globe/）下路由可匹配 */}
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <AnimatedRoutes>
             <Route path="/" data-genie-title="Home Page" data-genie-key="Home" element={<PageTransition transition="slide-up"><Index /></PageTransition>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

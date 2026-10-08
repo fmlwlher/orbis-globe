@@ -1,0 +1,83 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # 允许在 Actions 页面手动触发
+  workflow_dispatch:
+
+# 授予 GITHUB_TOKEN 部署 Pages 所需的最小权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只保留一个部署，取消进行中的旧任务（但不打断已发布的部署）
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        working-directory: frontend
+        run: npx tsc -b --noEmit
+
+      - name: Build
+        working-directory: frontend
+        # vite.config.ts 会读取 GITHUB_REPOSITORY 自动推导 base 路径
+        run: pnpm build
+
+      - name: Add single-file edition
+        # 把离线单文件版一并发布，访客可直接访问 /globe.html
+        run: |
+          if [ -f globe.html ]; then
+            cp globe.html frontend/dist/globe.html
+            echo "已附加 globe.html 单文件版"
+          fi
+
+      - name: Write .nojekyll
+        # 阻止 Jekyll 处理，避免以下划线开头的资源目录被忽略
+        run: touch frontend/dist/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
