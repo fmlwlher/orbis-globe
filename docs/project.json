@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Remove pseudo cloud layer and unify ocean blue",
+  "version_description": "Add continent and ocean name labels",
   "preview_type": "pc"
 }

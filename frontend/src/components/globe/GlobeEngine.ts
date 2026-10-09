@@ -19,6 +19,7 @@ import {
   type Category,
   type Place,
 } from './places';
+import { REGIONS, REGION_STYLE, type Region } from './regions';
 
 export interface GlobeState {
   lat: number;
@@ -44,6 +45,7 @@ export type LayerKey =
   | 'parallels'
   | 'parallelLabels'
   | 'axis'
+  | 'regions'
   | 'markers'
   | 'arcs'
   | 'atmosphere'
@@ -57,6 +59,8 @@ export interface LayerVisibility {
   parallels: boolean;
   parallelLabels: boolean;
   axis: boolean;
+  /** 大洲 / 大洋名称标注 */
+  regions: boolean;
   markers: boolean;
   arcs: boolean;
   atmosphere: boolean;
@@ -152,6 +156,8 @@ export class GlobeEngine {
   private parallelGroup!: THREE.Group;
   private parallelLabelGroup!: THREE.Group;
   private axisGroup!: THREE.Group;
+  private regionGroup!: THREE.Group;
+  private regionSprites: THREE.Sprite[] = [];
   private markerGroup!: THREE.Group;
   private arcGroup!: THREE.Group;
   private starField!: THREE.Points;
@@ -218,6 +224,7 @@ export class GlobeEngine {
     parallels: true,
     parallelLabels: true,
     axis: true,
+    regions: true,
     markers: true,
     arcs: true,
     atmosphere: true,
@@ -275,6 +282,7 @@ export class GlobeEngine {
     this.buildStars();
     this.buildEarth();
     this.buildGrid();
+    this.buildRegions();
     this.buildMarkers();
     this.buildArcs();
     this.buildSelectionRing();
@@ -662,6 +670,97 @@ export class GlobeEngine {
     sprite.scale.set(0.115, 0.058, 1);
     sprite.position.set(v.x, v.y, v.z);
     return sprite;
+  }
+
+  /**
+   * 生成一个「大洲 / 大洋」名称精灵。
+   * 与 makeLabelSprite 的区别：画布更大、字号更大、带描边加深，
+   * 并且主名（中文）与副名（英文）分两行绘制，保证贴上球面后仍然清晰可读。
+   *
+   * @param region 区域数据（决定文字、配色与字号系数）
+   * @param v      世界坐标位置
+   */
+  private makeRegionSprite(region: Region, v: { x: number; y: number; z: number }) {
+    const style = REGION_STYLE[region.kind];
+
+    // 以「中文名 + 英文名」为缓存键，两者不同则纹理不同
+    const cacheKey = `${region.kind}:${region.name}:${region.nameEn}`;
+    let tex = this.labelTextures.get(cacheKey);
+    if (!tex) {
+      // 画布宽高：给英文长名（如 NORTH AMERICA）留足横向空间
+      const W = 512;
+      const H = 160;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // 英文副名（较小、较淡，位于下方）
+      ctx.font = '600 34px "SF Mono", Menlo, Consolas, monospace';
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = 'rgba(0,0,0,0.95)';
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = style.glow;
+      ctx.strokeText(region.nameEn, W / 2, 112);
+      ctx.globalAlpha = 0.72;
+      ctx.fillStyle = style.color;
+      ctx.fillText(region.nameEn, W / 2, 112);
+      ctx.globalAlpha = 1;
+
+      // 中文主名（较大、较亮，位于上方）
+      ctx.font = '700 62px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif';
+      ctx.shadowBlur = 14;
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = style.glow;
+      ctx.strokeText(region.name, W / 2, 54);
+      ctx.fillStyle = style.color;
+      ctx.fillText(region.name, W / 2, 54);
+
+      tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      this.labelTextures.set(cacheKey, tex);
+    }
+
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false, // 名称是"标签"语义，允许压在球面之上，避免被地形吞掉
+        opacity: 1,
+      })
+    );
+    // 基础尺寸 0.42 × 0.131（与 512×160 画布同比例），再乘区域字号系数。
+    // 取值偏保守：Sprite 永远正对相机，靠近球体边缘时不会像贴地文字那样自然压扁，
+    // 所以基准尺寸要比"想当然的字号"小一档，避免多个标签在屏幕上互相压住。
+    const baseW = 0.42 * region.scale;
+    sprite.scale.set(baseW, baseW * (160 / 512), 1);
+    sprite.position.set(v.x, v.y, v.z);
+    sprite.userData.region = region;
+    sprite.userData.baseScale = baseW;
+    return sprite;
+  }
+
+  /** 构建大洲 / 大洋名称标注层 */
+  private buildRegions() {
+    this.regionGroup = new THREE.Group();
+    this.regionGroup.renderOrder = 3;
+    // 名称贴在球面外侧一点点，避免与地表 z-fighting
+    const r = EARTH_RADIUS * 1.03;
+
+    this.regionSprites = [];
+    for (const region of REGIONS) {
+      const v = latLngToVector3(region.lat, region.lng, r);
+      const sprite = this.makeRegionSprite(region, v);
+      this.regionSprites.push(sprite);
+      this.regionGroup.add(sprite);
+    }
+
+    this.earthGroup.add(this.regionGroup);
   }
 
   /** 用户输入定位后显示的蓝点 */
@@ -1094,6 +1193,9 @@ export class GlobeEngine {
       case 'axis':
         this.axisGroup.visible = visible;
         break;
+      case 'regions':
+        this.regionGroup.visible = visible;
+        break;
       case 'markers':
         this.markerGroup.visible = visible;
         break;
@@ -1273,6 +1375,32 @@ export class GlobeEngine {
         const opacity = clamp((facing - 0.06) * 2.6, 0, isSelected ? 1 : 0.82);
         mat.opacity = categoryOk ? opacity : 0;
         sprite.visible = categoryOk && (facing > 0.02 || isSelected);
+      }
+    }
+
+    // —— 大洲 / 大洋名称：背面淡出 + 边缘收缩 ——
+    // 名称贴在球面上，转到背面时若不淡出会透过地球看到（depthTest 已关闭），
+    // 观感很乱。这里按法线与相机方向的夹角做平滑淡出。
+    // 同时让标签在接近球体边缘（视线越斜）时逐渐缩小，模拟"贴在球面上被压扁"的效果，
+    // 否则 Sprite 始终正对相机、在边缘处会显得过大并压住相邻标签。
+    if (this.layers.regions) {
+      const camDir = this.camera.position.clone().normalize();
+      for (const sprite of this.regionSprites) {
+        const wp = new THREE.Vector3();
+        sprite.getWorldPosition(wp);
+        const facing = wp.clone().normalize().dot(camDir);
+        // facing > 0.02 才可见；用 smoothstep 让边缘过渡自然
+        const t = clamp((facing - 0.02) / 0.34, 0, 1);
+        const ease = t * t * (3 - 2 * t);
+        // 收缩系数：正视时 1.0，接近轮廓时收到 0.62
+        // 边缘收得比较狠，是因为 Sprite 在轮廓附近会与球面切线几乎垂直，
+        // 若不缩小就会"浮"在球体外面，视觉上像是飘在前景、压住其他标签。
+        const shrink = 0.62 + 0.38 * ease;
+        const base = sprite.userData.baseScale as number;
+        const w = base * shrink;
+        sprite.scale.set(w, w * (160 / 512), 1);
+        (sprite.material as THREE.SpriteMaterial).opacity = ease;
+        sprite.visible = ease > 0.01;
       }
     }
 

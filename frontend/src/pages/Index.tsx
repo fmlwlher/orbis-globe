@@ -40,6 +40,7 @@ const LAYER_LABELS: { key: LayerKey; label: string; hint: string }[] = [
   { key: 'parallels', label: '纬线', hint: '含回归线与极圈虚线' },
   { key: 'parallelLabels', label: '纬度', hint: '标注每条纬线的纬度' },
   { key: 'axis', label: '地轴线', hint: '贯穿南北极的自转轴' },
+  { key: 'regions', label: '洲洋名', hint: '标注七大洲与五大洋' },
   { key: 'markers', label: '观测标记', hint: '城市 / 地标 / 天文台' },
   { key: 'arcs', label: '航线弧光', hint: '以北京为枢纽的连线' },
   { key: 'atmosphere', label: '大气辉光', hint: '边缘散射光晕' },
@@ -71,6 +72,7 @@ const Index = () => {
     parallels: true,
     parallelLabels: true,
     axis: true,
+    regions: true,
     markers: true,
     arcs: true,
     atmosphere: true,
@@ -186,6 +188,7 @@ const Index = () => {
     engineRef.current?.setLayerVisible('parallels', layers.parallels);
     engineRef.current?.setLayerVisible('parallelLabels', layers.parallelLabels);
     engineRef.current?.setLayerVisible('axis', layers.axis);
+    engineRef.current?.setLayerVisible('regions', layers.regions);
     engineRef.current?.setLayerVisible('markers', layers.markers);
     engineRef.current?.setLayerVisible('arcs', layers.arcs);
     engineRef.current?.setLayerVisible('atmosphere', layers.atmosphere);
