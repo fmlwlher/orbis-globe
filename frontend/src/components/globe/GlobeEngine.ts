@@ -145,7 +145,6 @@ export class GlobeEngine {
 
   private earthGroup: THREE.Group;
   private earthMesh!: THREE.Mesh<THREE.SphereGeometry, THREE.MeshPhongMaterial>;
-  private cloudMesh!: THREE.Mesh<THREE.SphereGeometry, THREE.MeshPhongMaterial>;
   private atmosphereMesh!: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   private gridGroup!: THREE.Group;
   private meridianGroup!: THREE.Group;
@@ -427,11 +426,13 @@ export class GlobeEngine {
 
            float lum = globeLuma(baseCol);
 
-           // ── 目标海色：向深蓝偏移并拉高饱和度、压低亮度 ──
-           vec3 oceanCol = baseCol;
-           oceanCol = mix(oceanCol, uOceanDeep, 0.42 * (1.0 - smoothstep(0.0, 0.30, lum)));
-           oceanCol = mix(oceanCol, uOceanTint, 0.40);
-           oceanCol *= 0.74;
+           // ── 目标海色：统一蓝色基调 ──
+           // 贴图的大洋中部带卫星合成图的太阳耀斑（亮白镜面反光区）。若从 baseCol
+           // 出发调色，耀斑区会保留大量灰白原色，看上去像"海洋上新增了大陆"。
+           // 因此海洋色不再继承贴图色相：在深海色与主题蓝之间按贴图亮度插值，
+           // 全程保持在蓝色域内，仅保留轻微的深浅起伏作为海面层次。
+           float oceanShade = 0.45 + 0.55 * smoothstep(0.0, 0.5, lum);
+           vec3 oceanCol = mix(uOceanDeep, uOceanTint, oceanShade);
 
            // ── 目标陆色：提亮并轻微增强暖调与对比 ──
            vec3 landCol = baseCol * uLandBoost;
@@ -459,20 +460,10 @@ export class GlobeEngine {
     this.earthMesh = new THREE.Mesh(geometry, material);
     this.earthGroup.add(this.earthMesh);
 
-    // 云层（复用拓扑贴图做轻微的浮雕感，避免额外资源依赖）
-    const cloudMat = new THREE.MeshPhongMaterial({
-      map: this.textures.topology,
-      transparent: true,
-      opacity: 0.075,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.FrontSide,
-      // 同样关闭镜面高光，防止太阳直射在云层球壳上形成暗淡光斑
-      specular: new THREE.Color(0x000000),
-      shininess: 1,
-    });
-    this.cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(EARTH_RADIUS * 1.004, 96, 64), cloudMat);
-    this.earthGroup.add(this.cloudMesh);
+    // 注：此前这里有一层用 topology 高度图充当颜色贴图的"云层"。
+    // 高度图里陆地亮、海洋黑，加法混合后等于把一张发光的陆地地图叠在球面，
+    // 且随时间缓慢自转——漂到海洋上空就被看成"海洋上新增的大陆"。
+    // 已整体移除；topology 仍作为 bumpMap 保留地形浮雕。
 
     // 大气辉光
     const atmoMat = new THREE.ShaderMaterial({
@@ -1124,7 +1115,6 @@ export class GlobeEngine {
         } else {
           this.earthMesh.material.color.setHex(0xffffff);
         }
-        this.cloudMesh.visible = visible;
         break;
     }
   }
@@ -1262,9 +1252,6 @@ export class GlobeEngine {
     this.distance += (this.targetDistance - this.distance) * (1 - Math.pow(0.0025, dt));
 
     this.applyCameras();
-
-    // —— 云层缓慢漂移 ——
-    this.cloudMesh.rotation.y += dt * 0.004;
 
     // —— 标记呼吸 ——
     if (this.layers.markers) {

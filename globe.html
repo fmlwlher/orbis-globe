@@ -468,10 +468,11 @@ earthMat.onBeforeCompile = (sh) => {
       #endif
       float landMask = 1.0 - smoothstep(0.34, 0.62, waterRaw);
       float lum = globeLuma(baseCol);
-      vec3 oceanCol = baseCol;
-      oceanCol = mix(oceanCol, uOceanDeep, 0.42 * (1.0 - smoothstep(0.0, 0.30, lum)));
-      oceanCol = mix(oceanCol, uOceanTint, 0.40);
-      oceanCol *= 0.74;
+      /* 海洋统一蓝色基调：不再继承贴图色相（贴图大洋带太阳耀斑亮区，
+         从 baseCol 出发调色会让耀斑区呈灰白，看起来像新增大陆），
+         在深海色与主题蓝之间按亮度插值，全程蓝域，仅保留轻微深浅 */
+      float oceanShade = 0.45 + 0.55 * smoothstep(0.0, 0.5, lum);
+      vec3 oceanCol = mix(uOceanDeep, uOceanTint, oceanShade);
       vec3 landCol = baseCol * uLandBoost;
       landCol = mix(vec3(globeLuma(landCol)), landCol, 1.20);
       landCol += vec3(0.045,0.032,0.014) * lum;
@@ -486,12 +487,8 @@ earthMat.onBeforeCompile = (sh) => {
 const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 96), earthMat);
 earthGroup.add(earth);
 
-const clouds = new THREE.Mesh(
-  new THREE.SphereGeometry(1.004, 96, 64),
-  new THREE.MeshPhongMaterial({ map: tex(TEX.topo), transparent:true, opacity:.075,
-    blending:THREE.AdditiveBlending, depthWrite:false, specular:new THREE.Color(0x000000), shininess:1 })
-);
-earthGroup.add(clouds);
+/* 注：此前这里的"云层"用 topo 高度图当颜色贴图，加法混合后等于把发光的
+   陆地地图叠在球面并缓慢漂移——漂到海洋上空就像"新增的大陆"。已移除。 */
 
 const atmo = new THREE.Mesh(
   new THREE.SphereGeometry(1.16, 64, 48),
@@ -826,7 +823,6 @@ $('layers').addEventListener('change', e=>{
       earthMat.bumpMap = layers[k] ? tex(TEX.topo,false) : null;
       earthMat.color.setHex(layers[k] ? 0xffffff : 0x1b2a4a);
       earthMat.needsUpdate = true;
-      clouds.visible = layers[k];
       break;
   }
 });
@@ -1010,7 +1006,6 @@ renderer.setAnimationLoop(()=>{
   dist+=(tDist-dist)*(1-Math.pow(.0025,dt));
   applyCam();
 
-  clouds.rotation.y+=dt*.004;
   stars.rotation.y+=dt*.005; stars.rotation.x+=dt*.0012;
 
   const markersVisible = layers.markers;
