@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Fix locate point centering drift",
+  "version_description": "Unify camera and marker coord conventions",
   "preview_type": "pc"
 }
