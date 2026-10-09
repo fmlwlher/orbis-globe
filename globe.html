@@ -505,6 +505,11 @@ const atmo = new THREE.Mesh(
 );
 earthGroup.add(atmo);
 
+/* 图层容器：经纬网格与区域标注的子分组都挂在它下面。
+   注意必须在这里声明——下面的网格构建代码会立即写入 layerG.*，
+   若声明靠后（原先在"状态与交互"段），会因 const 的暂时性死区(TDZ)报错，
+   导致整段脚本中断、地球仪完全出不来。 */
+const layerG = {};
 /* 经纬网格（总容器 + 五个独立子分组） */
 const grid = new THREE.Group();
 earthGroup.add(grid);
@@ -532,72 +537,6 @@ const makeLabel = (text, v) => {
   sp.scale.set(.115,.058,1); sp.position.set(v.x,v.y,v.z);
   return sp;
 };
-
-/* ── 大洲 / 大洋名称标注 ──────────────────────────────────────────
-   坐标为各区域的「视觉重心」而非几何中心：让文字落在陆地/洋面主体上，
-   避开边缘与相邻区域，使字看起来"压在这块区域上"。
-   scale 为字号系数——面积越大的区域字越大，形成视觉层级。 */
-const REGION_STYLE = {
-  continent: { color:'rgba(255,232,178,0.96)', glow:'rgba(120,80,20,0.95)' },  /* 暖金：呼应陆地 */
-  ocean:     { color:'rgba(150,214,255,0.95)', glow:'rgba(6,40,80,0.95)'   },  /* 冷蓝：呼应洋面 */
-};
-const REGIONS = [
-  { id:'asia',          name:'亚洲',   en:'ASIA',           lat:45,  lng:90,   kind:'continent', scale:1.25 },
-  { id:'africa',        name:'非洲',   en:'AFRICA',         lat:3,   lng:21,   kind:'continent', scale:1.15 },
-  { id:'north-america', name:'北美洲', en:'NORTH AMERICA',  lat:46,  lng:-100, kind:'continent', scale:1.15 },
-  { id:'south-america', name:'南美洲', en:'SOUTH AMERICA',  lat:-14, lng:-59,  kind:'continent', scale:1.10 },
-  { id:'europe',        name:'欧洲',   en:'EUROPE',         lat:51,  lng:16,   kind:'continent', scale:0.92 },
-  { id:'oceania',       name:'大洋洲', en:'OCEANIA',        lat:-25, lng:134,  kind:'continent', scale:0.92 },
-  { id:'antarctica',    name:'南极洲', en:'ANTARCTICA',     lat:-76, lng:10,   kind:'continent', scale:0.96 },
-  { id:'pacific',       name:'太平洋', en:'PACIFIC OCEAN',  lat:-8,  lng:-160, kind:'ocean',     scale:1.28 },
-  { id:'atlantic',      name:'大西洋', en:'ATLANTIC OCEAN', lat:8,   lng:-32,  kind:'ocean',     scale:1.18 },
-  { id:'indian',        name:'印度洋', en:'INDIAN OCEAN',   lat:-22, lng:76,   kind:'ocean',     scale:1.15 },
-  /* 贴近极点但略偏太平洋一侧：既保持"被各大洲环抱"的直观位置，
-     又不与「欧洲」「北美洲」在低纬视角下挤在一起 */
-  { id:'arctic',        name:'北冰洋', en:'ARCTIC OCEAN',   lat:86,  lng:170,  kind:'ocean',     scale:0.86 },
-  { id:'southern',      name:'南冰洋', en:'SOUTHERN OCEAN', lat:-52, lng:108,  kind:'ocean',     scale:0.86 },
-];
-const regionTexCache = new Map();
-/* 中/英文分两行绘制：中文主名在上（大而亮），英文副名在下（小而淡），
-   外面加一圈同色系深色描边，保证压在复杂地表上依然清晰可读。 */
-function makeRegionLabel(rg, v){
-  const st = REGION_STYLE[rg.kind];
-  const key = rg.kind+':'+rg.name+':'+rg.en;
-  let t = regionTexCache.get(key);
-  if(!t){
-    const W=512, H=160, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-    const x=cv.getContext('2d');
-    x.textAlign='center'; x.textBaseline='middle';
-    /* 英文副名 */
-    x.font='600 34px "SF Mono", Menlo, Consolas, monospace';
-    x.lineJoin='round'; x.shadowColor='rgba(0,0,0,0.95)'; x.shadowBlur=10;
-    x.lineWidth=6; x.strokeStyle=st.glow; x.strokeText(rg.en, W/2, 112);
-    x.globalAlpha=.72; x.fillStyle=st.color; x.fillText(rg.en, W/2, 112); x.globalAlpha=1;
-    /* 中文主名 */
-    x.font='700 62px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif';
-    x.shadowBlur=14; x.lineWidth=8; x.strokeStyle=st.glow; x.strokeText(rg.name, W/2, 54);
-    x.fillStyle=st.color; x.fillText(rg.name, W/2, 54);
-    t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4;
-    regionTexCache.set(key,t);
-  }
-  const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true,
-    depthWrite:false, depthTest:false }));   /* depthTest 关：名称是"标签"语义，
-                                                允许压在球面之上，不被地形吞掉 */
-  const baseW = .42*rg.scale;                /* 基准尺寸偏保守：Sprite 永远正对相机，
-                                                靠近边缘时不会像贴地文字那样自然压扁 */
-  sp.scale.set(baseW, baseW*(160/512), 1);
-  sp.position.set(v.x,v.y,v.z);
-  sp.userData.base = baseW;
-  return sp;
-}
-layerG.regions = new THREE.Group();
-layerG.regions.renderOrder = 3;
-const regionSprites = [];
-for (const rg of REGIONS){
-  const sp = makeRegionLabel(rg, llToV(rg.lat, rg.lng, 1.03)); /* 1.03R：贴在球面外侧，避免 z-fighting */
-  regionSprites.push(sp); layerG.regions.add(sp);
-}
-earthGroup.add(layerG.regions);
 
 {
   const mat = new THREE.LineBasicMaterial({ color:0x4de3ff, transparent:true, opacity:.16, depthWrite:false, blending:THREE.AdditiveBlending });
@@ -730,7 +669,72 @@ const selRing = (()=>{
 const MIN_D=1.28, MAX_D=7;
 let tLat=25, tLng=20, cLat=25, cLng=20, dist=3.1, tDist=3.1;
 let axisTilt=90, tAxisTilt=90;
-const layerG = {};
+
+/* ── 大洲 / 大洋名称标注 ──────────────────────────────────────────
+   坐标为各区域的「视觉重心」而非几何中心：让文字落在陆地/洋面主体上，
+   避开边缘与相邻区域，使字看起来"压在这块区域上"。
+   scale 为字号系数——面积越大的区域字越大，形成视觉层级。 */
+const REGION_STYLE = {
+  continent: { color:'rgba(255,232,178,0.96)', glow:'rgba(120,80,20,0.95)' },  /* 暖金：呼应陆地 */
+  ocean:     { color:'rgba(150,214,255,0.95)', glow:'rgba(6,40,80,0.95)'   },  /* 冷蓝：呼应洋面 */
+};
+const REGIONS = [
+  { id:'asia',          name:'亚洲',   en:'ASIA',           lat:45,  lng:90,   kind:'continent', scale:1.25 },
+  { id:'africa',        name:'非洲',   en:'AFRICA',         lat:3,   lng:21,   kind:'continent', scale:1.15 },
+  { id:'north-america', name:'北美洲', en:'NORTH AMERICA',  lat:46,  lng:-100, kind:'continent', scale:1.15 },
+  { id:'south-america', name:'南美洲', en:'SOUTH AMERICA',  lat:-14, lng:-59,  kind:'continent', scale:1.10 },
+  { id:'europe',        name:'欧洲',   en:'EUROPE',         lat:51,  lng:16,   kind:'continent', scale:0.92 },
+  { id:'oceania',       name:'大洋洲', en:'OCEANIA',        lat:-25, lng:134,  kind:'continent', scale:0.92 },
+  { id:'antarctica',    name:'南极洲', en:'ANTARCTICA',     lat:-76, lng:10,   kind:'continent', scale:0.96 },
+  { id:'pacific',       name:'太平洋', en:'PACIFIC OCEAN',  lat:-8,  lng:-160, kind:'ocean',     scale:1.28 },
+  { id:'atlantic',      name:'大西洋', en:'ATLANTIC OCEAN', lat:8,   lng:-32,  kind:'ocean',     scale:1.18 },
+  { id:'indian',        name:'印度洋', en:'INDIAN OCEAN',   lat:-22, lng:76,   kind:'ocean',     scale:1.15 },
+  /* 贴近极点但略偏太平洋一侧：既保持"被各大洲环抱"的直观位置，
+     又不与「欧洲」「北美洲」在低纬视角下挤在一起 */
+  { id:'arctic',        name:'北冰洋', en:'ARCTIC OCEAN',   lat:86,  lng:170,  kind:'ocean',     scale:0.86 },
+  { id:'southern',      name:'南冰洋', en:'SOUTHERN OCEAN', lat:-52, lng:108,  kind:'ocean',     scale:0.86 },
+];
+const regionTexCache = new Map();
+/* 中/英文分两行绘制：中文主名在上（大而亮），英文副名在下（小而淡），
+   外面加一圈同色系深色描边，保证压在复杂地表上依然清晰可读。 */
+function makeRegionLabel(rg, v){
+  const st = REGION_STYLE[rg.kind];
+  const key = rg.kind+':'+rg.name+':'+rg.en;
+  let t = regionTexCache.get(key);
+  if(!t){
+    const W=512, H=160, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+    const x=cv.getContext('2d');
+    x.textAlign='center'; x.textBaseline='middle';
+    /* 英文副名 */
+    x.font='600 34px "SF Mono", Menlo, Consolas, monospace';
+    x.lineJoin='round'; x.shadowColor='rgba(0,0,0,0.95)'; x.shadowBlur=10;
+    x.lineWidth=6; x.strokeStyle=st.glow; x.strokeText(rg.en, W/2, 112);
+    x.globalAlpha=.72; x.fillStyle=st.color; x.fillText(rg.en, W/2, 112); x.globalAlpha=1;
+    /* 中文主名 */
+    x.font='700 62px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif';
+    x.shadowBlur=14; x.lineWidth=8; x.strokeStyle=st.glow; x.strokeText(rg.name, W/2, 54);
+    x.fillStyle=st.color; x.fillText(rg.name, W/2, 54);
+    t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4;
+    regionTexCache.set(key,t);
+  }
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true,
+    depthWrite:false, depthTest:false }));   /* depthTest 关：名称是"标签"语义，
+                                                允许压在球面之上，不被地形吞掉 */
+  const baseW = .42*rg.scale;                /* 基准尺寸偏保守：Sprite 永远正对相机，
+                                                靠近边缘时不会像贴地文字那样自然压扁 */
+  sp.scale.set(baseW, baseW*(160/512), 1);
+  sp.position.set(v.x,v.y,v.z);
+  sp.userData.base = baseW;
+  return sp;
+}
+layerG.regions = new THREE.Group();
+layerG.regions.renderOrder = 3;
+const regionSprites = [];
+for (const rg of REGIONS){
+  const sp = makeRegionLabel(rg, llToV(rg.lat, rg.lng, 1.03)); /* 1.03R：贴在球面外侧，避免 z-fighting */
+  regionSprites.push(sp); layerG.regions.add(sp);
+}
+earthGroup.add(layerG.regions);
 let dragging=false, moved=false, last={x:0,y:0}, down={x:0,y:0}, vel={lat:0,lng:0};
 let idle=0, autoRot=true, autoActive=true, selected=null;
 /* 定位保持：focusOn 后置 true，自转暂停，使目标点稳定停在画面正中；
