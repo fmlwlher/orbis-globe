@@ -236,7 +236,7 @@ const Index = () => {
    */
   const handleCoordBlur = (field: 'lat' | 'lng') => {
     setCoordInput((p) => {
-      const next = normalizeCoordInput(p[field], field);
+      const next = normalizeCoordInput(p[field]);
       return next === p[field] ? p : { ...p, [field]: next };
     });
   };

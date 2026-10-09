@@ -836,7 +836,7 @@ $('btnReset').addEventListener('click', ()=>{ setSelected(null); resetView(); id
 
 /* ── 坐标定位交互（数字 + 度符号° + 方向字母） ── */
 /* 输入容错：补全为规范格式。30N → 30°N，45W → 45°W；缺方向字母时只补度符号 */
-function normalizeCoordInput(raw, kind){
+function normalizeCoordInput(raw){
   const text = String(raw||'').trim();
   if (!text) return text;
   // 方向字母不限 NSEW，以便错用字母时也能先把度符号补上
@@ -851,7 +851,7 @@ function parseAxis(text, kind){
   const negDir = kind==='lat' ? 'S' : 'W';
   const label  = kind==='lat' ? '纬度' : '经度';
   const limit  = kind==='lat' ? 90 : 180;
-  const str = normalizeCoordInput(text, kind).trim();
+  const str = normalizeCoordInput(text).trim();
   if (!str) return { error: `请输入${label}` };
   const m = str.match(/^(\d+(?:\.\d+)?)\s*°\s*([NSEWnsew])$/);
   if (!m) return { error: `${label}格式应为「数字°${posDir}/${negDir}」，如 ${kind==='lat'?'30':'45'}°${posDir}` };
@@ -887,8 +887,8 @@ $('btnLocate').addEventListener('click', doLocate);
 $('inpLat').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
 $('inpLng').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
 /* 失焦时补全为规范格式（30N → 30°N），不擅自添加方向字母 */
-$('inpLat').addEventListener('blur', ()=>{ $('inpLat').value = normalizeCoordInput($('inpLat').value, 'lat'); });
-$('inpLng').addEventListener('blur', ()=>{ $('inpLng').value = normalizeCoordInput($('inpLng').value, 'lng'); });
+$('inpLat').addEventListener('blur', ()=>{ $('inpLat').value = normalizeCoordInput($('inpLat').value); });
+$('inpLng').addEventListener('blur', ()=>{ $('inpLng').value = normalizeCoordInput($('inpLng').value); });
 $('btnClearCoord').addEventListener('click', ()=>{
   clearCoordPoint();
   const msg=$('coordMsg'); msg.textContent=coordHint; msg.classList.remove('err');

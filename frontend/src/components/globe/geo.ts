@@ -133,7 +133,7 @@ export interface ParsedCoord {
  * 让随后 parseAxis 报出的是「方向字母应为 N 或 S」这个真正的错误。
  * 已在正确格式（含 °）时仅做去空格与字母大写的规整；无法识别的输入原样返回。
  */
-export function normalizeCoordInput(raw: string, kind: 'lat' | 'lng'): string {
+export function normalizeCoordInput(raw: string): string {
   const text = raw.trim();
   if (!text) return text;
 
@@ -155,7 +155,7 @@ export function normalizeCoordInput(raw: string, kind: 'lat' | 'lng'): string {
  * 同时宽容接受省略度符号的写法（30N），便于用户快速输入。
  */
 export function parseLatitude(raw: string): ParsedCoord {
-  const text = normalizeCoordInput(raw, 'lat');
+  const text = normalizeCoordInput(raw);
   if (!text) return { error: '请输入纬度' };
   return parseAxis(text, 'lat');
 }
@@ -167,7 +167,7 @@ export function parseLatitude(raw: string): ParsedCoord {
  * 同样宽容接受省略度符号的写法（45E）。
  */
 export function parseLongitude(raw: string): ParsedCoord {
-  const text = normalizeCoordInput(raw, 'lng');
+  const text = normalizeCoordInput(raw);
   if (!text) return { error: '请输入经度' };
   return parseAxis(text, 'lng');
 }
