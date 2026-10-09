@@ -692,7 +692,6 @@ const REGIONS = [
   /* 贴近极点但略偏太平洋一侧：既保持"被各大洲环抱"的直观位置，
      又不与「欧洲」「北美洲」在低纬视角下挤在一起 */
   { id:'arctic',        name:'北冰洋', en:'ARCTIC OCEAN',   lat:86,  lng:170,  kind:'ocean',     scale:0.86 },
-  { id:'southern',      name:'南冰洋', en:'SOUTHERN OCEAN', lat:-52, lng:108,  kind:'ocean',     scale:0.86 },
 ];
 const regionTexCache = new Map();
 /* 中/英文分两行绘制：中文主名在上（大而亮），英文副名在下（小而淡），
@@ -870,7 +869,7 @@ const LAYER_DEFS=[
   ['meridians','经线','每 15° 一条经圈'],['meridianLabels','经度','标注每条经线的经度'],
   ['parallels','纬线','含回归线与极圈虚线'],['parallelLabels','纬度','标注每条纬线的纬度'],
   ['axis','地轴线','贯穿南北极的自转轴'],
-  ['regions','洲洋名','标注七大洲与五大洋'],
+  ['regions','洲洋名','标注七大洲与四大洋'],
   ['markers','观测标记','城市 / 地标 / 天文台'],['arcs','航线弧光','以北京为枢纽的连线'],
   ['atmosphere','大气辉光','边缘散射光晕'],['stars','深空星场','远景恒星背景']];
 $('layers').innerHTML=LAYER_DEFS.map(([k,l,h],i)=>`

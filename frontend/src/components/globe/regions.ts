@@ -96,15 +96,6 @@ export const REGIONS: Region[] = [
     kind: 'ocean',
     scale: 0.86,
   },
-  {
-    id: 'southern',
-    name: '南冰洋',
-    nameEn: 'SOUTHERN OCEAN',
-    lat: -52,
-    lng: 108,
-    kind: 'ocean',
-    scale: 0.86,
-  },
 ];
 
 /** 大洲 / 大洋的配色 */

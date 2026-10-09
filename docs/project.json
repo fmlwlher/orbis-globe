@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Add continent and ocean name labels",
+  "version_description": "Remove Southern Ocean label from globe",
   "preview_type": "pc"
 }
