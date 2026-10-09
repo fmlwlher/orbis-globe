@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Auto-complete degree sign in coordinate input",
+  "version_description": "Fix locate point centering drift",
   "preview_type": "pc"
 }
