@@ -96,7 +96,11 @@ const Index = () => {
     try {
       engine = new GlobeEngine(mountRef.current, {
         onStateChange: setState,
-        onSelect: setSelected,
+        // 选中即定位：同步暂停自转，避免画面在定位完成后又把点转走
+        onSelect: (place) => {
+          setSelected(place);
+          if (place) setAutoRotate(false);
+        },
         onHover: (place, screen) => {
           setHovered(place);
           const tip = tooltipRef.current;
@@ -161,6 +165,8 @@ const Index = () => {
   const flyTo = useCallback((place: Place) => {
     engineRef.current?.focusOn(place.lat, place.lng, 1.9);
     engineRef.current?.setSelected(place);
+    // 定位后暂停自转，让目标点稳定停在画面正中（与引擎的 focusHold 保持一致）
+    setAutoRotate(false);
     setSearch('');
   }, []);
 
@@ -220,6 +226,8 @@ const Index = () => {
     setCoordError('');
     engineRef.current?.setSelected(null);
     engineRef.current?.placeCoordPoint(lat, lng);
+    // 定位后暂停自转，让蓝点稳定停在画面正中（与引擎的 focusHold 保持一致）
+    setAutoRotate(false);
     // 回填规范化后的格式，便于确认解析结果
     const normalized = toCoordInput(lat, lng);
     setCoordInput(normalized);

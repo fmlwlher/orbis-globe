@@ -197,6 +197,12 @@ export class GlobeEngine {
   private autoRotate = true;
   private autoRotateSpeed = 0.045;
   private userIdleTimer = 0;
+  /**
+   * 定位保持标记：focusOn 聚焦到某个坐标后置 true，用户在界面上开启自转
+   * 或手动拖拽/缩放后才清除。作用是让被定位的点稳定停在画面正中——
+   * 否则自转会在聚焦结束约 2.4 秒后恢复，把刚定位的点转走。
+   */
+  private focusHold = false;
   private raycaster = new THREE.Raycaster();
   private pointerNDC = new THREE.Vector2();
   private hovered: Place | null = null;
@@ -895,6 +901,8 @@ export class GlobeEngine {
     this.pointerDownAt = { x: e.clientX, y: e.clientY };
     this.lastPointer = { x: e.clientX, y: e.clientY };
     this.userIdleTimer = 0;
+    // 用户开始拖拽即视为主动调整视角，解除定位保持
+    this.focusHold = false;
 
     if (this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()];
@@ -978,6 +986,8 @@ export class GlobeEngine {
     e.preventDefault();
     const factor = Math.exp(e.deltaY * 0.0012);
     this.setDistance(this.targetDistance * factor);
+    // 用户滚轮缩放视为主动操作视角，解除定位保持
+    this.focusHold = false;
   };
 
   private setDistance(d: number) {
@@ -1024,8 +1034,16 @@ export class GlobeEngine {
 
     if (distance !== undefined) this.setDistance(distance);
     if (axisTiltDeg !== undefined) this.targetAxisTiltDeg = axisTiltDeg;
+    // 聚焦期间及其后都保持自转关闭，让目标点稳定停在画面正中。
+    // 见 focusHold 的说明：仅把 userIdleTimer 设为负值不够，自转仍会恢复。
+    this.focusHold = true;
     this.autoRotateActive = false;
-    this.userIdleTimer = -2.4; // 聚焦后延迟更久再自动旋转
+    this.userIdleTimer = 0;
+  }
+
+  /** 解除定位保持（用户主动开启自转或手动操作视角时调用） */
+  releaseFocusHold() {
+    this.focusHold = false;
   }
 
   /**
@@ -1057,7 +1075,11 @@ export class GlobeEngine {
 
   setAutoRotate(enabled: boolean) {
     this.autoRotate = enabled;
-    this.userIdleTimer = enabled ? 0 : -9999;
+    this.userIdleTimer = 0;
+    // 只有「显式开启自转」才解除定位保持；关闭自转时保留保持标记，
+    // 否则 UI 在定位过程中调用 setAutoRotate(false) 会把刚设好的保持清掉。
+    if (enabled) this.focusHold = false;
+    else this.autoRotateActive = false;
   }
 
   setLayerVisible(key: LayerKey, visible: boolean) {
@@ -1218,7 +1240,8 @@ export class GlobeEngine {
       }
 
       this.userIdleTimer += dt;
-      if (this.autoRotate && this.userIdleTimer > 1.6) {
+      // focusHold 期间不自转：定位/选中某个点后，该点需要稳定停在画面正中
+      if (this.autoRotate && !this.focusHold && this.userIdleTimer > 1.6) {
         this.autoRotateActive = true;
         const speed = this.autoRotateSpeed * (this.distance / 3.1);
         this.targetLng += speed;

@@ -670,6 +670,9 @@ let axisTilt=90, tAxisTilt=90;
 const layerG = {};
 let dragging=false, moved=false, last={x:0,y:0}, down={x:0,y:0}, vel={lat:0,lng:0};
 let idle=0, autoRot=true, autoActive=true, selected=null;
+/* 定位保持：focusOn 后置 true，自转暂停，使目标点稳定停在画面正中；
+   用户显式开启自转或手动拖拽/缩放时解除 */
+let focusHold=false;
 let catsOn=[...CAT_ORDER];
 const layers={ satellite:true, grid:true, meridians:true, meridianLabels:true,
   parallels:true, parallelLabels:true, axis:true, markers:true, arcs:true, atmosphere:true, stars:true };
@@ -683,7 +686,9 @@ function focusOn(lat,lng,d,tilt){
   tLng += ((lng - tLng + 540) % 360) - 180;
   if (d !== undefined) tDist = clamp(d, MIN_D, MAX_D);
   if (tilt !== undefined) tAxisTilt = tilt;
-  autoActive = false; idle = -2.4;
+  /* 聚焦期间及其后都保持自转关闭，让目标点稳定停在画面正中 */
+  focusHold = true;
+  autoActive = false; idle = 0;
 }
 /* 复位：地轴与水平线成 66.5° 且向右倾斜（113.5 = 180 - 66.5） */
 function resetView(){ vel.lat=0; vel.lng=0; focusOn(25,20,3.1,113.5); }
@@ -695,7 +700,9 @@ function placeCoordPoint(lat,lng){
 function clearCoordPoint(){ coordPoint.visible=false; }
 function setSelected(p){
   selected = p;
-  if (p){ const v=llToV(p.lat,p.lng,PLACE_R*1.005); selRing.position.set(v.x,v.y,v.z); selRing.visible=true; focusOn(p.lat,p.lng); }
+  if (p){ const v=llToV(p.lat,p.lng,PLACE_R*1.005); selRing.position.set(v.x,v.y,v.z); selRing.visible=true; focusOn(p.lat,p.lng);
+    /* 选中即定位，同步暂停自转，让目标点稳定停在画面正中 */
+    autoRot=false; if (typeof syncRotateBtn==='function') syncRotateBtn(); }
   else selRing.visible = false;
   renderReadout();
 }
@@ -730,6 +737,8 @@ el.addEventListener('pointerdown', e=>{
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   dragging=true; moved=false; vel.lat=vel.lng=0;
   down={x:e.clientX,y:e.clientY}; last={x:e.clientX,y:e.clientY}; idle=0;
+  /* 用户开始拖拽即视为主动调整视角，解除定位保持 */
+  focusHold=false;
   if(pointers.size===2){
     const [a,b]=[...pointers.values()];
     pinch0=Math.hypot(a.x-b.x,a.y-b.y); pinchD0=tDist;
@@ -764,7 +773,7 @@ function endPtr(e){
 el.addEventListener('pointerup', endPtr);
 el.addEventListener('pointercancel', endPtr);
 el.addEventListener('pointerleave', ()=>{ if(!dragging){hovered=null;$('tip').classList.remove('on');} });
-el.addEventListener('wheel', e=>{ e.preventDefault(); tDist=clamp(tDist*Math.exp(e.deltaY*.0012),MIN_D,MAX_D); }, {passive:false});
+el.addEventListener('wheel', e=>{ e.preventDefault(); tDist=clamp(tDist*Math.exp(e.deltaY*.0012),MIN_D,MAX_D); focusHold=false; }, {passive:false});
 addEventListener('resize', ()=>{
   const w=container.clientWidth||innerWidth, h=container.clientHeight||innerHeight;
   camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h,false);
@@ -828,11 +837,12 @@ $('search').addEventListener('change', e=>{
   else { e.target.value=''; }
 });
 $('btnRotate').addEventListener('click', ()=>{
-  autoRot=!autoRot; autoActive=autoRot; idle=autoRot?0:-9999;
-  $('btnRotate').textContent = autoRot ? '❙❙ 暂停自转' : '▶ 开启自转';
-  $('btnRotate').classList.toggle('primary', autoRot);
+  autoRot=!autoRot; idle=0;
+  /* 显式开启自转时解除定位保持；关闭时只停止自转，保留保持标记 */
+  if (autoRot) focusHold=false; else autoActive=false;
+  syncRotateBtn();
 });
-$('btnReset').addEventListener('click', ()=>{ setSelected(null); resetView(); idle=0; autoActive=true; });
+$('btnReset').addEventListener('click', ()=>{ setSelected(null); resetView(); idle=0; focusHold=false; autoActive=autoRot; });
 
 /* ── 坐标定位交互（数字 + 度符号° + 方向字母） ── */
 /* 输入容错：补全为规范格式。30N → 30°N，45W → 45°W；缺方向字母时只补度符号 */
@@ -882,6 +892,13 @@ function doLocate(){
   $('inpLat').value = toCoordText(lat,'N','S');
   $('inpLng').value = toCoordText(lng,'E','W');
   setSelected(null); placeCoordPoint(lat, lng);
+  // 定位后自转已暂停，同步按钮文案与样式
+  autoRot=false; syncRotateBtn();
+}
+/* 自转按钮文案/样式与当前状态保持一致 */
+function syncRotateBtn(){
+  $('btnRotate').textContent = autoRot ? '❙❙ 暂停自转' : '▶ 开启自转';
+  $('btnRotate').classList.toggle('primary', autoRot);
 }
 $('btnLocate').addEventListener('click', doLocate);
 $('inpLat').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
@@ -981,7 +998,8 @@ renderer.setAnimationLoop(()=>{
       vel.lng*=.93; vel.lat*=.93;
     }
     idle+=dt;
-    if(autoRot&&idle>1.6){ autoActive=true; const s=.045*(dist/3.1); tLng+=s; cLng+=s; }
+    /* focusHold 期间不自转：定位/选中某点后需让它稳定停在画面正中 */
+    if(autoRot&&!focusHold&&idle>1.6){ autoActive=true; const s=.045*(dist/3.1); tLng+=s; cLng+=s; }
     else if(autoRot) autoActive=false;
   }
 
