@@ -14,6 +14,7 @@ import {
   type Place,
 } from '@/components/globe/places';
 import {
+  checkAxisInput,
   formatDistance,
   formatLatLng,
   greatCircleDistance,
@@ -23,6 +24,9 @@ import {
   toCoordInput,
 } from '@/components/globe/geo';
 import './globe.css';
+
+/** localStorage 键：记住上次定位的坐标，刷新页面后仍保留 */
+const COORD_STORAGE_KEY = 'orbis:coord';
 
 const CATEGORY_ORDER: Category[] = [
   'capital',
@@ -45,6 +49,9 @@ const LAYER_LABELS: { key: LayerKey; label: string; hint: string }[] = [
   { key: 'arcs', label: '航线弧光', hint: '以北京为枢纽的连线' },
   { key: 'atmosphere', label: '大气辉光', hint: '边缘散射光晕' },
   { key: 'stars', label: '深空星场', hint: '远景恒星背景' },
+  { key: 'zoneTint', label: '纬度分带', hint: '低/中/高纬度分色（默认关）' },
+  { key: 'hemisphereTint', label: '南北半球', hint: '南北半球分色（默认关）' },
+  { key: 'ewTint', label: '东西半球', hint: '东西半球分色（默认关）' },
 ];
 
 const Index = () => {
@@ -77,11 +84,34 @@ const Index = () => {
     arcs: true,
     atmosphere: true,
     stars: true,
+    // 三个地理分区着色：默认关闭
+    zoneTint: false,
+    hemisphereTint: false,
+    ewTint: false,
   });
   const [autoRotate, setAutoRotate] = useState(true);
   const [search, setSearch] = useState('');
-  const [coordInput, setCoordInput] = useState({ lat: '', lng: '' });
+  // 坐标输入：初始值从 localStorage 恢复上次定位的坐标（刷新后保留）
+  const [coordInput, setCoordInput] = useState(() => {
+    try {
+      const saved = localStorage.getItem(COORD_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as { lat?: string; lng?: string };
+        if (typeof parsed?.lat === 'string' && typeof parsed?.lng === 'string') {
+          return { lat: parsed.lat, lng: parsed.lng };
+        }
+      }
+    } catch {
+      // 隐私模式 / 存储被禁用 / 数据损坏：静默退化为空
+    }
+    return { lat: '', lng: '' };
+  });
   const [coordError, setCoordError] = useState('');
+  /** 失焦后的即时校验提示（按字段分别提示，避免两个框共用一个错误） */
+  const [coordHints, setCoordHints] = useState<{ lat: string; lng: string }>({
+    lat: '',
+    lng: '',
+  });
   const [clockText, setClockText] = useState('--:--:--');
   const [utcText, setUtcText] = useState('--:--:--');
 
@@ -193,6 +223,9 @@ const Index = () => {
     engineRef.current?.setLayerVisible('arcs', layers.arcs);
     engineRef.current?.setLayerVisible('atmosphere', layers.atmosphere);
     engineRef.current?.setLayerVisible('stars', layers.stars);
+    engineRef.current?.setLayerVisible('zoneTint', layers.zoneTint);
+    engineRef.current?.setLayerVisible('hemisphereTint', layers.hemisphereTint);
+    engineRef.current?.setLayerVisible('ewTint', layers.ewTint);
   }, [layers]);
 
   useEffect(() => {
@@ -208,6 +241,15 @@ const Index = () => {
     engineRef.current?.setSelected(null);
     engineRef.current?.resetView();
     setAutoRotate(true);
+  };
+
+  /** 持久化坐标输入（容错：隐私模式 / 存储被禁用时静默忽略） */
+  const persistCoord = (value: { lat: string; lng: string }) => {
+    try {
+      localStorage.setItem(COORD_STORAGE_KEY, JSON.stringify(value));
+    } catch {
+      // 忽略写入失败
+    }
   };
 
   /** 输入经纬度定位，并在该坐标绘制蓝点 */
@@ -227,6 +269,7 @@ const Index = () => {
     const lng = lngParsed.value;
 
     setCoordError('');
+    setCoordHints({ lat: '', lng: '' });
     engineRef.current?.setSelected(null);
     engineRef.current?.placeCoordPoint(lat, lng);
     // 定位后暂停自转，让蓝点稳定停在画面正中（与引擎的 focusHold 保持一致）
@@ -234,6 +277,8 @@ const Index = () => {
     // 回填规范化后的格式，便于确认解析结果
     const normalized = toCoordInput(lat, lng);
     setCoordInput(normalized);
+    // 记住本次定位的坐标，刷新后仍保留
+    persistCoord(normalized);
   };
 
   const handleClearCoord = () => {
@@ -242,13 +287,32 @@ const Index = () => {
   };
 
   /**
-   * 失焦时把输入补全为规范格式（30N → 30°N）。
-   * 只补度符号与规整大小写，不擅自添加方向字母，避免替用户猜方向。
+   * 失焦时的即时处理：
+   * 1) 把输入补全为规范格式（30N → 30°N）
+   * 2) 立即校验并给出轻提示（缺方向字母 / 超范围等），无需等到点击「定位」
    */
   const handleCoordBlur = (field: 'lat' | 'lng') => {
-    setCoordInput((p) => {
-      const next = normalizeCoordInput(p[field]);
-      return next === p[field] ? p : { ...p, [field]: next };
+    setCoordInput((prev) => {
+      const normalized = normalizeCoordInput(prev[field]);
+      const next = normalized === prev[field] ? prev : { ...prev, [field]: normalized };
+
+      // 空输入不打扰（用户可能只是想清空）
+      const check = checkAxisInput(next[field], field);
+      setCoordHints((h) => ({ ...h, [field]: check.hint ?? '' }));
+
+      // 两个字段都合法时顺手记住，避免用户忘了点「定位」就刷新
+      if (field === 'lat') {
+        const c = checkAxisInput(next.lng, 'lng');
+        if (check.kind === 'ok' && c.kind === 'ok') {
+          persistCoord({ lat: next.lat, lng: next.lng });
+        } else if (check.kind !== 'ok') {
+          persistCoord({ lat: next.lat, lng: next.lng });
+        }
+      } else if (check.kind === 'ok') {
+        persistCoord({ lat: next.lat, lng: next.lng });
+      }
+
+      return next;
     });
   };
 
@@ -477,32 +541,52 @@ const Index = () => {
             <span className="globe-card__index">04</span>坐标定位
           </h2>
           <div className="globe-coord">
-            <input
-              className="globe-coord__input"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="90°S-90°N"
-              aria-label="纬度"
-              value={coordInput.lat}
-              onChange={(e) => setCoordInput((p) => ({ ...p, lat: e.target.value }))}
-              onBlur={() => handleCoordBlur('lat')}
-              onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
-            />
-            <input
-              className="globe-coord__input"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="180°W-180°E"
-              aria-label="经度"
-              value={coordInput.lng}
-              onChange={(e) => setCoordInput((p) => ({ ...p, lng: e.target.value }))}
-              onBlur={() => handleCoordBlur('lng')}
-              onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
-            />
+            <div className="globe-coord__field">
+              <input
+                className="globe-coord__input"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="0°-90°"
+                aria-label="纬度"
+                aria-invalid={coordHints.lat ? true : undefined}
+                data-invalid={coordHints.lat ? 'true' : undefined}
+                value={coordInput.lat}
+                onChange={(e) => {
+                  setCoordInput((p) => ({ ...p, lat: e.target.value }));
+                  setCoordHints((h) => (h.lat ? { ...h, lat: '' } : h));
+                }}
+                onBlur={() => handleCoordBlur('lat')}
+                onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
+              />
+              {coordHints.lat ? (
+                <p className="globe-coord__tip">{coordHints.lat}</p>
+              ) : null}
+            </div>
+            <div className="globe-coord__field">
+              <input
+                className="globe-coord__input"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="0°-180°"
+                aria-label="经度"
+                aria-invalid={coordHints.lng ? true : undefined}
+                data-invalid={coordHints.lng ? 'true' : undefined}
+                value={coordInput.lng}
+                onChange={(e) => {
+                  setCoordInput((p) => ({ ...p, lng: e.target.value }));
+                  setCoordHints((h) => (h.lng ? { ...h, lng: '' } : h));
+                }}
+                onBlur={() => handleCoordBlur('lng')}
+                onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
+              />
+              {coordHints.lng ? (
+                <p className="globe-coord__tip">{coordHints.lng}</p>
+              ) : null}
+            </div>
           </div>
           <div className="globe-coord__actions">
             <button type="button" className="globe-btn globe-btn--sm" onClick={handleLocate}>
@@ -518,7 +602,7 @@ const Index = () => {
             <p className="globe-actions__hint">
               数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W
               <br />
-              输入 30N 离开输入框会自动补全为 30°N
+              输入 30N 离开输入框会自动补全为 30°N；刷新页面会保留上次坐标
             </p>
           )}
         </section>

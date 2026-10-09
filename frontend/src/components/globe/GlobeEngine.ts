@@ -49,7 +49,10 @@ export type LayerKey =
   | 'markers'
   | 'arcs'
   | 'atmosphere'
-  | 'stars';
+  | 'stars'
+  | 'zoneTint'
+  | 'hemisphereTint'
+  | 'ewTint';
 
 export interface LayerVisibility {
   satellite: boolean;
@@ -65,6 +68,12 @@ export interface LayerVisibility {
   arcs: boolean;
   atmosphere: boolean;
   stars: boolean;
+  /** 低 / 中 / 高纬度分带着色（默认关闭） */
+  zoneTint: boolean;
+  /** 南 / 北半球着色（默认关闭） */
+  hemisphereTint: boolean;
+  /** 东 / 西半球着色（默认关闭） */
+  ewTint: boolean;
 }
 
 const EARTH_RADIUS = 1;
@@ -158,6 +167,8 @@ export class GlobeEngine {
   private axisGroup!: THREE.Group;
   private regionGroup!: THREE.Group;
   private regionSprites: THREE.Sprite[] = [];
+  /** 东西半球分界线（20°W / 160°E）的共享材质 */
+  private hemisphereDividerMat!: THREE.MeshBasicMaterial;
   private markerGroup!: THREE.Group;
   private arcGroup!: THREE.Group;
   private starField!: THREE.Points;
@@ -229,6 +240,10 @@ export class GlobeEngine {
     arcs: true,
     atmosphere: true,
     stars: true,
+    // 三个地理分区着色开关：默认全部关闭
+    zoneTint: false,
+    hemisphereTint: false,
+    ewTint: false,
   };
 
   constructor(container: HTMLElement, options: GlobeOptions = {}) {
@@ -398,6 +413,16 @@ export class GlobeEngine {
       shader.uniforms.uOceanTint = { value: new THREE.Color(0x1a6ed8) };
       shader.uniforms.uOceanDeep = { value: new THREE.Color(0x031a3d) };
       shader.uniforms.uLandBoost = { value: 1.34 };
+      // ── 三个地理分区着色开关（默认全部关闭）──
+      // 若用户在着色器首次编译之前就打开了开关，这里读取暂存值
+      shader.uniforms.uZoneEnable = { value: this.pendingToggles.uZoneEnable ?? 0 };
+      shader.uniforms.uHemisphereEnable = { value: this.pendingToggles.uHemisphereEnable ?? 0 };
+      shader.uniforms.uEwEnable = { value: this.pendingToggles.uEwEnable ?? 0 };
+      // 把 vMapUv(0..1) 还原为「经度+180 / 纬度+90」所需的仿射参数。
+      // Three.js 贴图默认 flipY=true，但 sphere 的 UV 原点在左下，
+      // 两者相抵后 v 自下而上递增，与纬度单调一致，故为恒等映射。
+      shader.uniforms.uUvScale = { value: new THREE.Vector2(360, 180) };
+      shader.uniforms.uUvOffset = { value: new THREE.Vector2(0, 0) };
 
       shader.fragmentShader = shader.fragmentShader
         .replace(
@@ -409,6 +434,11 @@ export class GlobeEngine {
            uniform vec3 uOceanTint;
            uniform vec3 uOceanDeep;
            uniform float uLandBoost;
+           uniform float uZoneEnable;
+           uniform float uHemisphereEnable;
+           uniform float uEwEnable;
+           uniform vec2 uUvOffset;
+           uniform vec2 uUvScale;
 
            float globeLuma(vec3 c) {
              return dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -450,6 +480,71 @@ export class GlobeEngine {
            // ── 比例校正：作用于已光照颜色，保留高光 / 地形 / 大气光 ──
            vec3 ratio = mix(oceanCol, landCol, landMask) / max(baseCol, vec3(0.03));
            gl_FragColor.rgb *= clamp(ratio, vec3(0.0), vec3(2.6));
+
+           // ══ 地理分区着色（三个独立开关，可同时开启）══
+           // 反推当前片元的经纬度：球体 UV 展开为
+           //   u = (lng + 180) / 360   v = (lat + 90) / 180
+           // 乘回 uUvScale/uUvOffset 后即可得到真实的 lng / lat。
+           vec2 ll = vMapUv * uUvScale + uUvOffset;   // x: 0..360(经度+180), y: 0..180
+           float fLat = ll.y - 90.0;                  // -90 .. 90
+           float fLngRaw = ll.x - 180.0;              // -180 .. 180
+
+           vec3 regionTint = vec3(0.0);
+           float regionAmt = 0.0;
+
+           // ── 1) 低 / 中 / 高纬度带（0-30 / 30-60 / 60-90）──
+           if (uZoneEnable > 0.5) {
+             float absLat = abs(fLat);
+             vec3 zc;
+             if (absLat < 30.0) {
+               zc = vec3(0.98, 0.72, 0.25);   // 低纬度：暖橙
+             } else if (absLat < 60.0) {
+               zc = vec3(0.36, 0.90, 0.62);   // 中纬度：青绿
+             } else {
+               zc = vec3(0.55, 0.66, 0.98);   // 高纬度：淡蓝紫
+             }
+             // 分界线处做 1.5° 的平滑过渡，避免硬边
+             float e1 = smoothstep(28.5, 31.5, absLat);
+             float e2 = smoothstep(58.5, 61.5, absLat);
+             vec3 blend = mix(mix(vec3(0.98, 0.72, 0.25), vec3(0.36, 0.90, 0.62), e1),
+                              vec3(0.55, 0.66, 0.98), e2);
+             regionTint += blend * 0.42;
+             regionAmt += 0.42;
+           }
+
+           // ── 2) 南 / 北半球 ──
+           if (uHemisphereEnable > 0.5) {
+             float northMix = smoothstep(-2.0, 2.0, fLat);  // 赤道处平滑过渡
+             vec3 hc = mix(vec3(0.42, 0.78, 1.0),          // 南半球：冷蓝
+                           vec3(1.0, 0.62, 0.48),          // 北半球：暖珊瑚
+                           northMix);
+             regionTint += hc * 0.40;
+             regionAmt += 0.40;
+           }
+
+           // ── 3) 东 / 西半球（20°W 向东 → 160°E 为东半球）──
+           if (uEwEnable > 0.5) {
+             // 把经度映射到以 20°W 为起点的 [0,360) 区间：
+             // t < 180 表示向东 180°（即到 160°E）→ 东半球
+             float t = mod(fLngRaw + 20.0 + 360.0, 360.0);
+             // 在两条分界线（0 与 180）附近做平滑过渡
+             float eastW = smoothstep(0.0, 4.0, t) * (1.0 - smoothstep(176.0, 180.0, t));
+             vec3 ew = mix(vec3(0.98, 0.52, 0.72),   // 西半球：品红
+                           vec3(0.40, 0.92, 0.88),   // 东半球：青
+                           eastW);
+             regionTint += ew * 0.40;
+             regionAmt += 0.40;
+           }
+
+           if (regionAmt > 0.0) {
+             // 分区色以"染色"方式叠加：保留原有明暗与地形，只偏移色相
+             vec3 tint = regionTint / max(regionAmt, 0.001);
+             float strength = clamp(regionAmt, 0.0, 0.85);
+             // 与已有颜色做柔和混合，避免盖掉海陆与昼夜层次
+             gl_FragColor.rgb = mix(gl_FragColor.rgb,
+                                    gl_FragColor.rgb * 0.35 + tint * (0.45 + 0.55 * globeLuma(gl_FragColor.rgb)),
+                                    strength);
+           }
 
            // ── 夜面城市灯光与冷色氛围 ──
            vec3 sunDir = normalize(vec3(-4.2, 2.6, 3.4));
@@ -533,6 +628,47 @@ export class GlobeEngine {
     return pts;
   }
 
+  /**
+   * 生成一条「有宽度」的经线带（用于东西半球分界线）。
+   *
+   * WebGL 的 LineBasicMaterial.linewidth 在 Windows / ANGLE 上会被强制为 1px，
+   * 无法做出"比普通经线更粗"的效果；因此改用贴地窄带网格来表现粗细。
+   * 带宽以"经度差"表示，在赤道最宽、向两极自然收敛（与真实经纬网一致）。
+   *
+   * @param lng    经线经度
+   * @param radius 贴附半径
+   * @param width  经方向半宽（单位：度）。0.0065° ≈ 赤道处 0.72km，视觉上约 3-4px
+   */
+  private buildMeridianBand(lng: number, radius: number, width: number) {
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const rows = 90;
+
+    for (let i = 0; i <= rows; i++) {
+      const lat = -90 + (180 * i) / rows;
+      // 两极附近的带宽会趋于 0，做一个下限避免退化
+      const cap = Math.max(Math.cos((lat * Math.PI) / 180), 0.06);
+      const w = width / cap;
+
+      const left = latLngToVector3(lat, lng - w, radius);
+      const right = latLngToVector3(lat, lng + w, radius);
+      positions.push(left.x, left.y, left.z, right.x, right.y, right.z);
+
+      if (i < rows) {
+        const a = i * 2;
+        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+
+    const mesh = new THREE.Mesh(geo, this.hemisphereDividerMat);
+    mesh.renderOrder = 3;
+    return mesh;
+  }
+
   private buildGrid() {
     // gridGroup 保留为总容器，子分组各自独立控制显隐
     this.gridGroup = new THREE.Group();
@@ -563,6 +699,16 @@ export class GlobeEngine {
       blending: THREE.AdditiveBlending,
     });
 
+    // 东西半球分界线的材质：亮青色实心窄带
+    this.hemisphereDividerMat = new THREE.MeshBasicMaterial({
+      color: 0x7ef0ff,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+
     const r = EARTH_RADIUS * 1.002;
 
     // ── 经线（360° 全经圈）──
@@ -571,6 +717,15 @@ export class GlobeEngine {
       const pts = this.buildCirclePoints('meridian', lng, r);
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       this.meridianGroup.add(new THREE.Line(geo, lng === 0 ? accent : mat));
+    }
+
+    // ── 东西半球分界线：20°W 与 160°E ──
+    // 这两条经线是国际通用的东西半球划分基准（20°W 向东至 160°E 为东半球）。
+    // 用更亮的青色 + 明显更粗的线，与每 15° 一条的普通经线区分开。
+    // 线粗通过在球面上生成一段"细窄带网格"实现——WebGL 的 linewidth 在多数平台
+    // （含 Chrome/ANGLE）会被忽略，只有 Mesh 带宽才能可靠地呈现粗细。
+    for (const lng of [-20, 160]) {
+      this.meridianGroup.add(this.buildMeridianBand(lng, r * 1.003, 0.0065));
     }
     this.gridGroup.add(this.meridianGroup);
 
@@ -1208,6 +1363,15 @@ export class GlobeEngine {
       case 'stars':
         this.starField.visible = visible;
         break;
+      case 'zoneTint':
+        this.setShaderToggle('uZoneEnable', visible);
+        break;
+      case 'hemisphereTint':
+        this.setShaderToggle('uHemisphereEnable', visible);
+        break;
+      case 'ewTint':
+        this.setShaderToggle('uEwEnable', visible);
+        break;
       case 'satellite':
         this.earthMesh.material.map = visible ? this.textures.day : null;
         this.earthMesh.material.bumpMap = visible ? this.textures.topology : null;
@@ -1225,6 +1389,28 @@ export class GlobeEngine {
     this.renderer.render(this.scene, this.camera);
     return this.renderer.domElement.toDataURL('image/png');
   }
+
+  /**
+   * 切换地表着色器里的某个地理分区开关。
+   *
+   * 材质是 MeshPhongMaterial + onBeforeCompile 注入，着色器对象保存在
+   * material.userData.shader；若材质已编译过即可直接改 uniform，
+   * 否则（首次在编译前调用）先记在 pendingToggles，等编译完成时补上。
+   */
+  private setShaderToggle(name: 'uZoneEnable' | 'uHemisphereEnable' | 'uEwEnable', on: boolean) {
+    const shader = this.earthMesh?.userData?.shader as
+      | { uniforms: Record<string, { value: number }> }
+      | undefined;
+    if (shader?.uniforms?.[name]) {
+      shader.uniforms[name].value = on ? 1 : 0;
+      return;
+    }
+    // 尚未编译：暂存，onBeforeCompile 里会读取并初始化
+    this.pendingToggles[name] = on ? 1 : 0;
+  }
+
+  /** 着色器编译完成前调用的开关值暂存区 */
+  private pendingToggles: Record<string, number> = {};
 
   private autoRotateActive = true;
 

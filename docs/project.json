@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Remove Southern Ocean label from globe",
+  "version_description": "坐标定位优化(即时校验/记忆输入/范围提示)、20W-160E分界经线、纬度分带与南北/东西半球着色开关",
   "preview_type": "pc"
 }

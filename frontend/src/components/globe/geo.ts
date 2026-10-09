@@ -203,6 +203,82 @@ function parseAxis(text: string, kind: 'lat' | 'lng'): ParsedCoord {
   return { value };
 }
 
+/**
+ * 失焦时的即时校验结果，供输入框做轻量提示 / 标红。
+ *
+ * 与 parseAxis 的区别：
+ * - 不依赖用户是否点击「定位」，随时可用
+ * - 缺方向字母时归为 kind='missing-dir'，配合 hint 给出提示文案
+ * - 缺度符号时归为 kind='missing-degree'，只有数字则归为 'incomplete'
+ * - 超范围归为 'range'，并给出正确的范围区间
+ */
+export type CoordCheckKind =
+  | 'ok'
+  | 'empty'
+  | 'missing-dir'
+  | 'missing-degree'
+  | 'incomplete'
+  | 'wrong-dir'
+  | 'range'
+  | 'invalid';
+
+export interface CoordCheck {
+  kind: CoordCheckKind;
+  /** 提示文案（ok 时为 undefined） */
+  hint?: string;
+  /** 解析出的数值（仅 kind==='ok' 时存在） */
+  value?: number;
+}
+
+/**
+ * 对单个输入框做即时校验，返回适合放在输入框下方的轻提示文案。
+ *
+ * 设计原则：**只提示、不擅自补全方向**——缺方向字母时告诉用户该填什么，
+ * 而不是替用户猜一个 N/S/E/W。
+ */
+export function checkAxisInput(raw: string, kind: 'lat' | 'lng'): CoordCheck {
+  const text = normalizeCoordInput(raw);
+  if (!text) return { kind: 'empty' };
+
+  const posDir = kind === 'lat' ? 'N' : 'E';
+  const negDir = kind === 'lat' ? 'S' : 'W';
+  const limit = kind === 'lat' ? 90 : 180;
+  const label = kind === 'lat' ? '纬度' : '经度';
+
+  // 只有数字、没有方向字母：给出补方向字母的提示
+  const digitsOnly = text.match(/^(\d+(?:\.\d+)?)°$/);
+  if (digitsOnly) {
+    const magnitude = Number.parseFloat(digitsOnly[1]);
+    if (magnitude > limit) {
+      return { kind: 'range', hint: `${label}需在 0°-${limit}° 之间` };
+    }
+    return {
+      kind: 'missing-dir',
+      hint: `请输入方向字母，例如 ${posDir} 或 ${negDir}`,
+    };
+  }
+
+  // 完整格式：数字 + 度符号 + 方向字母
+  const m = text.match(/^(\d+(?:\.\d+)?)\s*°\s*([NSEWnsew])$/);
+  if (!m) {
+    return { kind: 'incomplete', hint: `${label}格式如 30°${posDir}` };
+  }
+
+  const magnitude = Number.parseFloat(m[1]);
+  if (!Number.isFinite(magnitude)) return { kind: 'invalid', hint: `${label}数值无效` };
+
+  const upper = m[2].toUpperCase();
+  if (upper !== posDir && upper !== negDir) {
+    return { kind: 'wrong-dir', hint: `${label}的方向字母应为 ${posDir} 或 ${negDir}` };
+  }
+
+  if (magnitude > limit) {
+    return { kind: 'range', hint: `${label}需在 0°-${limit}° 之间` };
+  }
+
+  return { kind: 'ok', value: upper === negDir ? -magnitude : magnitude };
+}
+
 /** 把经纬度格式化为带度符号与方向字母的输入格式（30°N / 45°W） */
 export function toCoordInput(lat: number, lng: number): { lat: string; lng: string } {
   const fmt = (v: number, pos: string, neg: string) => {

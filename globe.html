@@ -97,12 +97,18 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
 .g-btn.primary{border-color:var(--g-amber-dim);color:var(--g-amber);background:rgba(255,181,71,.09)}
 .g-btn.primary:hover{border-color:var(--g-amber);box-shadow:0 0 18px -6px var(--g-amber)}
 .axis-hint{color:var(--g-amber);opacity:.72}
-.g-coord{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g-coord{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+.g-coord-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.g-coord-tip{margin:0;font-family:var(--g-mono);font-size:9px;line-height:1.35;letter-spacing:.02em;color:#ffb4b4;
+  min-height:0}
 .g-coord-input{width:100%;min-width:0;padding:8px 9px;border:1px solid var(--g-line-strong);border-radius:2px;
   background:rgba(6,13,26,.72);color:var(--g-text);font-family:var(--g-mono);font-size:11.5px;letter-spacing:.04em;outline:none;
   transition:border-color .16s ease,box-shadow .16s ease}
 .g-coord-input::placeholder{color:var(--g-text-faint);letter-spacing:.02em}
 .g-coord-input:focus{border-color:var(--g-cyan);box-shadow:0 0 14px -5px var(--g-cyan)}
+/* 失焦校验未通过：即时标红 */
+.g-coord-input[data-invalid]{border-color:#ff7b7b;box-shadow:0 0 12px -4px rgba(255,123,123,.75)}
+.g-coord-input[data-invalid]:focus{border-color:#ff7b7b;box-shadow:0 0 14px -4px rgba(255,123,123,.9)}
 .g-coord-input::-webkit-outer-spin-button,.g-coord-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .g-coord-input[type=number]{-moz-appearance:textfield;appearance:textfield}
 .g-coord-actions{display:flex;gap:8px;margin-top:9px}
@@ -226,14 +232,20 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
     <section class="g-card">
       <h2><span class="ix">04</span>坐标定位</h2>
       <div class="g-coord">
-        <input class="g-coord-input" id="inpLat" type="text" autocomplete="off" spellcheck="false" placeholder="90°S-90°N" aria-label="纬度"/>
-        <input class="g-coord-input" id="inpLng" type="text" autocomplete="off" spellcheck="false" placeholder="180°W-180°E" aria-label="经度"/>
+        <div class="g-coord-field">
+          <input class="g-coord-input" id="inpLat" type="text" autocomplete="off" spellcheck="false" placeholder="0°-90°" aria-label="纬度"/>
+          <p class="g-coord-tip"></p>
+        </div>
+        <div class="g-coord-field">
+          <input class="g-coord-input" id="inpLng" type="text" autocomplete="off" spellcheck="false" placeholder="0°-180°" aria-label="经度"/>
+          <p class="g-coord-tip"></p>
+        </div>
       </div>
       <div class="g-actions g-coord-actions">
         <button class="g-btn" id="btnLocate">⌾ 定位并标记</button>
         <button class="g-btn" id="btnClearCoord">清除蓝点</button>
       </div>
-      <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N</p>
+      <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N；刷新页面会保留上次坐标</p>
     </section>
   </aside>
 
@@ -439,6 +451,15 @@ const earthMat = new THREE.MeshPhongMaterial({
   bumpMap: tex(TEX.topo,false), bumpScale: .014,
   specular: new THREE.Color(0x000000), shininess: 1,
 });
+/* 地理分区开关：着色器编译前调用的值先暂存于此 */
+const pendingToggles = {};
+/* 切换地表着色器里的某个地理分区开关 */
+function setShaderToggle(name, on){
+  const sh = earthMat.userData && earthMat.userData.shader;
+  if (sh && sh.uniforms && sh.uniforms[name]) { sh.uniforms[name].value = on ? 1 : 0; return; }
+  /* 尚未编译：暂存，onBeforeCompile 里会读取并初始化 */
+  pendingToggles[name] = on ? 1 : 0;
+}
 earthMat.onBeforeCompile = (sh) => {
   sh.uniforms.uNightMap = { value: tex(TEX.night) };
   sh.uniforms.uWaterMap = { value: tex(TEX.water,false) };
@@ -446,6 +467,15 @@ earthMat.onBeforeCompile = (sh) => {
   sh.uniforms.uOceanTint = { value: new THREE.Color(0x1a6ed8) };
   sh.uniforms.uOceanDeep = { value: new THREE.Color(0x031a3d) };
   sh.uniforms.uLandBoost = { value: 1.34 };
+  /* 三个地理分区着色开关（默认全部关闭）；若在着色器首次编译前就已打开，读取暂存值 */
+  sh.uniforms.uZoneEnable = { value: pendingToggles.uZoneEnable ?? 0 };
+  sh.uniforms.uHemisphereEnable = { value: pendingToggles.uHemisphereEnable ?? 0 };
+  sh.uniforms.uEwEnable = { value: pendingToggles.uEwEnable ?? 0 };
+  /* 把 vMapUv(0..1) 还原为「经度+180 / 纬度+90」的仿射参数。
+     已实测确认：u*360 = lng+180，v*180 = lat+90（球面 UV 原点在左下，
+     与 flipY 相抵后 v 自下而上递增，与纬度单调一致） */
+  sh.uniforms.uUvScale = { value: new THREE.Vector2(360, 180) };
+  sh.uniforms.uUvOffset = { value: new THREE.Vector2(0, 0) };
   sh.fragmentShader = sh.fragmentShader
     .replace('#include <common>', `#include <common>
       uniform sampler2D uNightMap;
@@ -454,6 +484,11 @@ earthMat.onBeforeCompile = (sh) => {
       uniform vec3 uOceanTint;
       uniform vec3 uOceanDeep;
       uniform float uLandBoost;
+      uniform float uZoneEnable;
+      uniform float uHemisphereEnable;
+      uniform float uEwEnable;
+      uniform vec2 uUvOffset;
+      uniform vec2 uUvScale;
       float globeLuma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }`)
     .replace('#include <dithering_fragment>',
       `#include <dithering_fragment>
@@ -478,11 +513,54 @@ earthMat.onBeforeCompile = (sh) => {
       landCol += vec3(0.045,0.032,0.014) * lum;
       vec3 ratio = mix(oceanCol, landCol, landMask) / max(baseCol, vec3(0.03));
       gl_FragColor.rgb *= clamp(ratio, vec3(0.0), vec3(2.6));
+
+      /* ══ 地理分区着色（三个独立开关，可同时开启）══
+         反推当前片元经纬度：u=(lng+180)/360, v=(lat+90)/180 */
+      vec2 ll = vMapUv * uUvScale + uUvOffset;
+      float fLat = ll.y - 90.0;
+      float fLngRaw = ll.x - 180.0;
+      vec3 regionTint = vec3(0.0);
+      float regionAmt = 0.0;
+
+      /* 1) 低 / 中 / 高纬度带（0-30 / 30-60 / 60-90） */
+      if (uZoneEnable > 0.5) {
+        float absLat = abs(fLat);
+        float e1 = smoothstep(28.5, 31.5, absLat);
+        float e2 = smoothstep(58.5, 61.5, absLat);
+        vec3 blend = mix(mix(vec3(0.98,0.72,0.25), vec3(0.36,0.90,0.62), e1),
+                         vec3(0.55,0.66,0.98), e2);
+        regionTint += blend * 0.42;
+        regionAmt += 0.42;
+      }
+      /* 2) 南 / 北半球 */
+      if (uHemisphereEnable > 0.5) {
+        float northMix = smoothstep(-2.0, 2.0, fLat);
+        vec3 hc = mix(vec3(0.42,0.78,1.0), vec3(1.0,0.62,0.48), northMix);
+        regionTint += hc * 0.40;
+        regionAmt += 0.40;
+      }
+      /* 3) 东 / 西半球（20°W 向东 → 160°E 为东半球） */
+      if (uEwEnable > 0.5) {
+        float t = mod(fLngRaw + 20.0 + 360.0, 360.0);
+        float eastW = smoothstep(0.0, 4.0, t) * (1.0 - smoothstep(176.0, 180.0, t));
+        vec3 ew = mix(vec3(0.98,0.52,0.72), vec3(0.40,0.92,0.88), eastW);
+        regionTint += ew * 0.40;
+        regionAmt += 0.40;
+      }
+      if (regionAmt > 0.0) {
+        vec3 tint = regionTint / max(regionAmt, 0.001);
+        float strength = clamp(regionAmt, 0.0, 0.85);
+        gl_FragColor.rgb = mix(gl_FragColor.rgb,
+          gl_FragColor.rgb * 0.35 + tint * (0.45 + 0.55 * globeLuma(gl_FragColor.rgb)),
+          strength);
+      }
+
       vec3 nrm = normalize(vNormal);
       float dayAmt = clamp(dot(nrm, vec3(${sunDir.x.toFixed(4)},${sunDir.y.toFixed(4)},${sunDir.z.toFixed(4)})), 0.0, 1.0);
       float nightMask = smoothstep(0.28, -0.05, dot(nrm, vec3(${sunDir.x.toFixed(4)},${sunDir.y.toFixed(4)},${sunDir.z.toFixed(4)})));
       float city = pow(dot(nightCol, vec3(0.299,0.587,0.114)), 1.35) * nightMask * uNightStrength;
       gl_FragColor.rgb += nightCol * city * 1.75 + vec3(0.16,0.20,0.34) * (1.0-dayAmt) * 0.16;`);
+  earthMat.userData.shader = sh;
 };
 const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 96), earthMat);
 earthGroup.add(earth);
@@ -538,10 +616,46 @@ const makeLabel = (text, v) => {
   return sp;
 };
 
+/* 东西半球分界线（20°W / 160°E）的共享材质 */
+let hemisphereDividerMat;
+
+/**
+ * 生成一条「有宽度」的经线带，用于东西半球分界线。
+ *
+ * WebGL 的 LineBasicMaterial.linewidth 在 Windows / ANGLE 上会被强制为 1px，
+ * 做不出"比普通经线更粗"的效果；因此改用贴地窄带网格来表现粗细。
+ * 带宽以"经度差"表示，赤道最宽、向两极自然收敛（与真实经纬网一致）。
+ *
+ * @param lng    经线经度
+ * @param radius 贴附半径
+ * @param width  经方向半宽（单位：度）
+ */
+function buildMeridianBand(lng, radius, width){
+  const positions=[], indices=[], rows=90;
+  for (let i=0;i<=rows;i++){
+    const lat=-90+180*i/rows;
+    // 两极附近带宽趋于 0，设下限避免退化
+    const cap=Math.max(Math.cos(lat*Math.PI/180), .06);
+    const w=width/cap;
+    const l=llToV(lat, lng-w, radius), rr=llToV(lat, lng+w, radius);
+    positions.push(l.x,l.y,l.z, rr.x,rr.y,rr.z);
+    if (i<rows){ const a=i*2; indices.push(a,a+1,a+2, a+1,a+3,a+2); }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+  geo.setIndex(indices);
+  const mesh=new THREE.Mesh(geo, hemisphereDividerMat);
+  mesh.renderOrder=3;
+  return mesh;
+}
+
 {
   const mat = new THREE.LineBasicMaterial({ color:0x4de3ff, transparent:true, opacity:.16, depthWrite:false, blending:THREE.AdditiveBlending });
   const acc = new THREE.LineBasicMaterial({ color:0xffc861, transparent:true, opacity:.38, depthWrite:false, blending:THREE.AdditiveBlending });
   const special = new THREE.LineDashedMaterial({ color:0xffb347, transparent:true, opacity:.6, dashSize:.052, gapSize:.036, depthWrite:false, blending:THREE.AdditiveBlending });
+  /* 东西半球分界线的材质：亮青色实心窄带 */
+  hemisphereDividerMat = new THREE.MeshBasicMaterial({ color:0x7ef0ff, transparent:true,
+    opacity:.7, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
   const r = 1.002;
 
   // 经线
@@ -549,6 +663,12 @@ const makeLabel = (text, v) => {
   for (let lng=-180; lng<180; lng+=15){
     layerG.meridians.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts('meridian',lng,r,2)), lng===0?acc:mat));
   }
+  /* ── 东西半球分界线：20°W 与 160°E ──
+     国际通用的东西半球划分基准（20°W 向东至 160°E 为东半球）。
+     比普通经线更粗更亮——WebGL 的 linewidth 在多数平台被忽略，
+     故改用球面窄带 Mesh 表现粗细。 */
+  layerG.meridians.add(buildMeridianBand(-20, r*1.003, .0065));
+  layerG.meridians.add(buildMeridianBand(160, r*1.003, .0065));
   grid.add(layerG.meridians);
 
   // 经度数值
@@ -741,7 +861,8 @@ let idle=0, autoRot=true, autoActive=true, selected=null;
 let focusHold=false;
 let catsOn=[...CAT_ORDER];
 const layers={ satellite:true, grid:true, meridians:true, meridianLabels:true,
-  parallels:true, parallelLabels:true, axis:true, regions:true, markers:true, arcs:true, atmosphere:true, stars:true };
+  parallels:true, parallelLabels:true, axis:true, regions:true, markers:true, arcs:true, atmosphere:true, stars:true,
+  zoneTint:false, hemisphereTint:false, ewTint:false };
 const pointers=new Map(); let pinch0=0, pinchD0=0;
 const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
 const clock = new THREE.Clock();
@@ -871,7 +992,10 @@ const LAYER_DEFS=[
   ['axis','地轴线','贯穿南北极的自转轴'],
   ['regions','洲洋名','标注七大洲与四大洋'],
   ['markers','观测标记','城市 / 地标 / 天文台'],['arcs','航线弧光','以北京为枢纽的连线'],
-  ['atmosphere','大气辉光','边缘散射光晕'],['stars','深空星场','远景恒星背景']];
+  ['atmosphere','大气辉光','边缘散射光晕'],['stars','深空星场','远景恒星背景'],
+  ['zoneTint','纬度分带','低/中/高纬度分色（默认关）'],
+  ['hemisphereTint','南北半球','南北半球分色（默认关）'],
+  ['ewTint','东西半球','东西半球分色（默认关）']];
 $('layers').innerHTML=LAYER_DEFS.map(([k,l,h],i)=>`
   <label class="g-switch"><span class="tx"><b>${l}</b><em>${h}</em></span>
   <input type="checkbox" data-k="${k}" ${layers[k]?'checked':''}/><span class="g-sw-track"><span class="g-sw-thumb"></span></span></label>`).join('');
@@ -889,6 +1013,9 @@ $('layers').addEventListener('change', e=>{
     case 'arcs': break;                  // 材质透明度在循环中处理
     case 'atmosphere': atmo.visible=layers[k]; break;
     case 'stars': stars.visible=layers[k]; break;
+    case 'zoneTint': setShaderToggle('uZoneEnable', layers[k]); break;
+    case 'hemisphereTint': setShaderToggle('uHemisphereEnable', layers[k]); break;
+    case 'ewTint': setShaderToggle('uEwEnable', layers[k]); break;
     case 'satellite':
       earthMat.map = layers[k] ? tex(TEX.day) : null;
       earthMat.bumpMap = layers[k] ? tex(TEX.topo,false) : null;
@@ -940,24 +1067,91 @@ function parseAxis(text, kind){
   if (value < -limit || value > limit) return { error: `${label}需在 ${limit}°${negDir} ~ ${limit}°${posDir} 之间` };
   return { value };
 }
-const coordHint = '数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N';
+const coordHint = '数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N；刷新页面会保留上次坐标';
 function toCoordText(v, pos, neg){
   if (v === 0) return '0°';
   const a = Math.abs(v);
   return `${Number.isInteger(a) ? a : a.toFixed(2).replace(/\.?0+$/, '')}°${v>0?pos:neg}`;
 }
+
+/**
+ * 失焦时的即时校验（与 React 版 checkAxisInput 同逻辑）：
+ * 只提示、不擅自补方向——缺方向字母时提示该填什么，而不是替用户猜。
+ */
+function checkAxis(raw, kind){
+  const text = normalizeCoordInput(raw).trim();
+  if (!text) return { kind:'empty' };
+  const posDir = kind==='lat' ? 'N' : 'E';
+  const negDir = kind==='lat' ? 'S' : 'W';
+  const limit  = kind==='lat' ? 90 : 180;
+  const label  = kind==='lat' ? '纬度' : '经度';
+
+  // 只有数字、没有方向字母
+  const digitsOnly = text.match(/^(\d+(?:\.\d+)?)°$/);
+  if (digitsOnly){
+    const mag = parseFloat(digitsOnly[1]);
+    if (mag > limit) return { kind:'range', hint:`${label}需在 0°-${limit}° 之间` };
+    return { kind:'missing-dir', hint:`请输入方向字母，例如 ${posDir} 或 ${negDir}` };
+  }
+
+  const m = text.match(/^(\d+(?:\.\d+)?)\s*°\s*([NSEWnsew])$/);
+  if (!m) return { kind:'incomplete', hint:`${label}格式如 30°${posDir}` };
+  const mag = parseFloat(m[1]);
+  if (!Number.isFinite(mag)) return { kind:'invalid', hint:`${label}数值无效` };
+  const up = m[2].toUpperCase();
+  if (up !== posDir && up !== negDir) return { kind:'wrong-dir', hint:`${label}的方向字母应为 ${posDir} 或 ${negDir}` };
+  if (mag > limit) return { kind:'range', hint:`${label}需在 0°-${limit}° 之间` };
+  return { kind:'ok', value: up===negDir ? -mag : mag };
+}
+
+/* 记住上次定位的坐标（隐私模式/禁用存储时静默忽略） */
+const COORD_KEY='orbis:coord';
+function persistCoord(v){ try{ localStorage.setItem(COORD_KEY, JSON.stringify(v)); }catch(e){} }
+function restoreCoord(){
+  try{
+    const s = localStorage.getItem(COORD_KEY);
+    if (!s) return;
+    const p = JSON.parse(s);
+    if (typeof p?.lat==='string' && typeof p?.lng==='string'){
+      $('inpLat').value = p.lat; $('inpLng').value = p.lng;
+    }
+  }catch(e){}
+}
+
+/* 失焦处理：补全格式 + 即时校验（轻提示 / 标红） */
+function onCoordBlur(inp, kind){
+  inp.value = normalizeCoordInput(inp.value);
+  const tip = inp.parentElement.querySelector('.g-coord-tip');
+  const check = checkAxis(inp.value, kind);
+  if (tip) tip.textContent = check.hint || '';
+  inp.toggleAttribute('data-invalid', !!check.hint);
+  /* 有效值顺手记住，用户忘点「定位」再刷新也不丢 */
+  if (check.kind === 'ok' || check.kind === 'empty'){
+    const other = kind==='lat' ? $('inpLng') : $('inpLat');
+    const otherCheck = checkAxis(other.value, kind==='lat'?'lng':'lat');
+    if (otherCheck.kind === 'ok' || otherCheck.kind === 'empty'){
+      persistCoord({ lat:$('inpLat').value, lng:$('inpLng').value });
+    }
+  }
+}
 function doLocate(){
   const msg = $('coordMsg');
   const la = parseAxis($('inpLat').value, 'lat');
-  if (la.error){ msg.textContent = la.error; msg.classList.add('err'); return; }
+  if (la.error){ msg.textContent = la.error; msg.classList.add('err');
+    $('inpLat').setAttribute('data-invalid',''); return; }
   const ln = parseAxis($('inpLng').value, 'lng');
-  if (ln.error){ msg.textContent = ln.error; msg.classList.add('err'); return; }
+  if (ln.error){ msg.textContent = ln.error; msg.classList.add('err');
+    $('inpLng').setAttribute('data-invalid',''); return; }
   const lat = la.value, lng = ln.value;
   msg.textContent = `已定位 ${toCoordText(lat,'N','S')} / ${toCoordText(lng,'E','W')}`;
   msg.classList.remove('err');
-  // 回填规范化格式，便于确认解析结果
+  // 回填规范化格式，便于确认解析结果；清掉失焦轻提示
   $('inpLat').value = toCoordText(lat,'N','S');
   $('inpLng').value = toCoordText(lng,'E','W');
+  $('inpLat').removeAttribute('data-invalid'); $('inpLng').removeAttribute('data-invalid');
+  document.querySelectorAll('.g-coord-tip').forEach(t=>t.textContent='');
+  // 记住本次定位，刷新后保留
+  persistCoord({ lat:$('inpLat').value, lng:$('inpLng').value });
   setSelected(null); placeCoordPoint(lat, lng);
   // 定位后自转已暂停，同步按钮文案与样式
   autoRot=false; syncRotateBtn();
@@ -970,9 +1164,16 @@ function syncRotateBtn(){
 $('btnLocate').addEventListener('click', doLocate);
 $('inpLat').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
 $('inpLng').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
-/* 失焦时补全为规范格式（30N → 30°N），不擅自添加方向字母 */
-$('inpLat').addEventListener('blur', ()=>{ $('inpLat').value = normalizeCoordInput($('inpLat').value); });
-$('inpLng').addEventListener('blur', ()=>{ $('inpLng').value = normalizeCoordInput($('inpLng').value); });
+/* 失焦：补全规范格式 + 即时校验（轻提示 / 标红），不必等点「定位」 */
+$('inpLat').addEventListener('blur', ()=>onCoordBlur($('inpLat'), 'lat'));
+$('inpLng').addEventListener('blur', ()=>onCoordBlur($('inpLng'), 'lng'));
+/* 输入时清除标红与提示，避免打字过程中一直红着 */
+function clearCoordTip(inp){ inp.removeAttribute('data-invalid');
+  const tip = inp.parentElement.querySelector('.g-coord-tip'); if (tip) tip.textContent=''; }
+$('inpLat').addEventListener('input', ()=>clearCoordTip($('inpLat')));
+$('inpLng').addEventListener('input', ()=>clearCoordTip($('inpLng')));
+/* 页面加载：恢复上次定位的坐标 */
+restoreCoord();
 $('btnClearCoord').addEventListener('click', ()=>{
   clearCoordPoint();
   const msg=$('coordMsg'); msg.textContent=coordHint; msg.classList.remove('err');
