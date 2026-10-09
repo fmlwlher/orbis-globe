@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Support N/S/E/W coordinate input format and tilt axis right",
+  "version_description": "Require degree sign in coordinate input, e.g. 30°N / 45°W",
   "preview_type": "pc"
 }

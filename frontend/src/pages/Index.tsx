@@ -460,7 +460,7 @@ const Index = () => {
               inputMode="text"
               autoComplete="off"
               spellCheck={false}
-              placeholder="纬度 如 30N / 30S"
+              placeholder="90°S-90°N"
               aria-label="纬度"
               value={coordInput.lat}
               onChange={(e) => setCoordInput((p) => ({ ...p, lat: e.target.value }))}
@@ -472,7 +472,7 @@ const Index = () => {
               inputMode="text"
               autoComplete="off"
               spellCheck={false}
-              placeholder="经度 如 45E / 45W"
+              placeholder="180°W-180°E"
               aria-label="经度"
               value={coordInput.lng}
               onChange={(e) => setCoordInput((p) => ({ ...p, lng: e.target.value }))}
@@ -491,7 +491,7 @@ const Index = () => {
             <p className="globe-coord__error">{coordError}</p>
           ) : (
             <p className="globe-actions__hint">
-              数字 + 方向字母（N/S 纬度，E/W 经度），如 30N / 45W
+              数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W
             </p>
           )}
         </section>

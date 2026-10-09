@@ -226,14 +226,14 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
     <section class="g-card">
       <h2><span class="ix">04</span>坐标定位</h2>
       <div class="g-coord">
-        <input class="g-coord-input" id="inpLat" type="text" autocomplete="off" spellcheck="false" placeholder="纬度 如 30N / 30S" aria-label="纬度"/>
-        <input class="g-coord-input" id="inpLng" type="text" autocomplete="off" spellcheck="false" placeholder="经度 如 45E / 45W" aria-label="经度"/>
+        <input class="g-coord-input" id="inpLat" type="text" autocomplete="off" spellcheck="false" placeholder="90°S-90°N" aria-label="纬度"/>
+        <input class="g-coord-input" id="inpLng" type="text" autocomplete="off" spellcheck="false" placeholder="180°W-180°E" aria-label="经度"/>
       </div>
       <div class="g-actions g-coord-actions">
         <button class="g-btn" id="btnLocate">⌾ 定位并标记</button>
         <button class="g-btn" id="btnClearCoord">清除蓝点</button>
       </div>
-      <p class="g-hint" id="coordMsg">数字 + 方向字母（N/S 纬度，E/W 经度），如 30N / 45W</p>
+      <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W</p>
     </section>
   </aside>
 
@@ -834,8 +834,8 @@ $('btnRotate').addEventListener('click', ()=>{
 });
 $('btnReset').addEventListener('click', ()=>{ setSelected(null); resetView(); idle=0; autoActive=true; });
 
-/* ── 坐标定位交互（支持 数字+方向字母 格式） ── */
-/* 解析 30N/30S/30n/30°N 等写法；不带字母时正数为北纬、负数为南纬 */
+/* ── 坐标定位交互（数字 + 度符号° + 方向字母） ── */
+/* 解析 30°N / 30°S / 30°n / 30° N 等写法；度符号必填，方向字母不区分大小写 */
 function parseAxis(text, kind){
   const posDir = kind==='lat' ? 'N' : 'E';
   const negDir = kind==='lat' ? 'S' : 'W';
@@ -843,26 +843,21 @@ function parseAxis(text, kind){
   const limit  = kind==='lat' ? 90 : 180;
   const str = String(text||'').trim();
   if (!str) return { error: `请输入${label}` };
-  const m = str.match(/^([+-]?)(\d+(?:\.\d+)?)\s*°?\s*([NSEWnsew])?$/);
-  if (!m) return { error: `${label}格式应为数字+${posDir}/${negDir}，如 30${posDir}` };
-  const magnitude = parseFloat(m[2]);
+  const m = str.match(/^(\d+(?:\.\d+)?)\s*°\s*([NSEWnsew])$/);
+  if (!m) return { error: `${label}格式应为「数字°${posDir}/${negDir}」，如 ${kind==='lat'?'30':'45'}°${posDir}` };
+  const magnitude = parseFloat(m[1]);
   if (!Number.isFinite(magnitude)) return { error: `${label}数值无效` };
-  let value = magnitude;
-  if (m[3]) {
-    const upper = m[3].toUpperCase();
-    if (upper !== posDir && upper !== negDir) return { error: `${label}方向字母应为 ${posDir} 或 ${negDir}` };
-    if (upper === negDir) value = -value;
-  } else if (m[1] === '-') {
-    value = -value;
-  }
-  if (value < -limit || value > limit) return { error: `${label}需在 -${limit} ~ ${limit} 之间` };
+  const upper = m[2].toUpperCase();
+  if (upper !== posDir && upper !== negDir) return { error: `${label}方向字母应为 ${posDir} 或 ${negDir}` };
+  const value = upper === negDir ? -magnitude : magnitude;
+  if (value < -limit || value > limit) return { error: `${label}需在 ${limit}°${negDir} ~ ${limit}°${posDir} 之间` };
   return { value };
 }
-const coordHint = '数字 + 方向字母（N/S 纬度，E/W 经度），如 30N / 45W';
+const coordHint = '数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W';
 function toCoordText(v, pos, neg){
-  if (v === 0) return '0';
+  if (v === 0) return '0°';
   const a = Math.abs(v);
-  return `${Number.isInteger(a) ? a : a.toFixed(2).replace(/\.?0+$/, '')}${v>0?pos:neg}`;
+  return `${Number.isInteger(a) ? a : a.toFixed(2).replace(/\.?0+$/, '')}°${v>0?pos:neg}`;
 }
 function doLocate(){
   const msg = $('coordMsg');

@@ -123,9 +123,9 @@ export interface ParsedCoord {
 
 /**
  * 解析纬度输入。
- * 支持「数字 + 方向字母」格式（字母不区分大小写，度符号与空格可选）：
- *   30N / 30n / 30°N → 北纬 30   30S / 30s → 南纬 30
- * 同时兼容不带字母的纯数字（正数为北纬、负数为南纬）。
+ * 格式为「数字 + 度符号° + 方向字母」（字母不区分大小写，度符号必填）：
+ *   30°N / 30°n → 北纬 30    30°S / 30°s → 南纬 30
+ * 度符号与方向字母之间的空格可有可无（30° N 亦可）。
  */
 export function parseLatitude(raw: string): ParsedCoord {
   const text = raw.trim();
@@ -135,8 +135,8 @@ export function parseLatitude(raw: string): ParsedCoord {
 
 /**
  * 解析经度输入。
- * 支持 45E / 45e / 45°E → 东经 45，45W / 45w → 西经 45；
- * 同样兼容不带字母的纯数字（正数为东经、负数为西经）。
+ * 格式为「数字 + 度符号° + 方向字母」：
+ *   45°E → 东经 45    45°W → 西经 45
  */
 export function parseLongitude(raw: string): ParsedCoord {
   const text = raw.trim();
@@ -150,43 +150,38 @@ function parseAxis(text: string, kind: 'lat' | 'lng'): ParsedCoord {
   const label = kind === 'lat' ? '纬度' : '经度';
   const limit = kind === 'lat' ? 90 : 180;
 
-  // 匹配：可选正负号 + 数字(可含小数) + 可选度符号 + 可选方向字母
-  const m = text.match(/^([+-]?)(\d+(?:\.\d+)?)\s*°?\s*([NSEWnsew])?$/);
+  // 匹配：数字(可含小数) + 必填度符号 + 方向字母；方向字母与度符号间允许空白
+  const m = text.match(/^(\d+(?:\.\d+)?)\s*°\s*([NSEWnsew])$/);
   if (!m) {
-    return { error: `${label}格式应为数字+${posDir}/${negDir}，例如 30${posDir}` };
+    const sample = kind === 'lat' ? '30' : '45';
+    return { error: `${label}格式应为「数字°${posDir}/${negDir}」，例如 ${sample}°${posDir}` };
   }
 
-  const [, sign, digits, letter] = m;
+  const [, digits, letter] = m;
   const magnitude = Number.parseFloat(digits);
   if (!Number.isFinite(magnitude)) return { error: `${label}数值无效` };
 
-  let value = magnitude;
-  if (letter) {
-    const upper = letter.toUpperCase();
-    // 方向字母与经纬度种类必须匹配（纬度用 N/S，经度用 E/W）
-    if (upper !== posDir && upper !== negDir) {
-      return { error: `${label}方向字母应为 ${posDir} 或 ${negDir}` };
-    }
-    if (upper === negDir) value = -value;
-    // 显式方向字母优先，忽略前导负号以避免歧义
-  } else if (sign === '-') {
-    value = -value;
+  // 方向字母与经纬度种类必须匹配（纬度用 N/S，经度用 E/W）
+  const upper = letter.toUpperCase();
+  if (upper !== posDir && upper !== negDir) {
+    return { error: `${label}方向字母应为 ${posDir} 或 ${negDir}` };
   }
+  const value = upper === negDir ? -magnitude : magnitude;
 
   if (value < -limit || value > limit) {
-    return { error: `${label}需在 -${limit} ~ ${limit} 之间` };
+    return { error: `${label}需在 ${limit}°${negDir} ~ ${limit}°${posDir} 之间` };
   }
 
   return { value };
 }
 
-/** 把经纬度格式化为带方向字母的输入格式（30N / 45W） */
+/** 把经纬度格式化为带度符号与方向字母的输入格式（30°N / 45°W） */
 export function toCoordInput(lat: number, lng: number): { lat: string; lng: string } {
   const fmt = (v: number, pos: string, neg: string) => {
-    if (v === 0) return '0';
+    if (v === 0) return '0°';
     const abs = Math.abs(v);
     const num = Number.isInteger(abs) ? String(abs) : abs.toFixed(2).replace(/\.?0+$/, '');
-    return `${num}${v > 0 ? pos : neg}`;
+    return `${num}°${v > 0 ? pos : neg}`;
   };
   return { lat: fmt(lat, 'N', 'S'), lng: fmt(lng, 'E', 'W') };
 }
