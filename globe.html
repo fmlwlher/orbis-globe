@@ -952,8 +952,10 @@ setInterval(()=>{
 
 /* ── 主循环 ───────────────────────────────────────── */
 function applyCam(){
-  const phi=(90-cLat)*DEG, th=(cLng+180)*DEG;
-  const px=Math.sin(phi)*Math.cos(th), py=Math.cos(phi), pz=Math.sin(phi)*Math.sin(th);
+  /* 相机方向必须与 llToV 完全同约定（-x，与贴图 UV 对齐）：
+     否则会飞到镜像位置，表现为"定位后标记点不在画面正中" */
+  const dir = llToV(cLat, cLng, 1);
+  const px=dir.x, py=dir.y, pz=dir.z;
   camera.position.set(dist*px, dist*py, dist*pz);
 
   // 显式构造相机基向量，使地轴投影与屏幕水平线成 axisTilt 夹角

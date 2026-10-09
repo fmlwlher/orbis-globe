@@ -1146,12 +1146,15 @@ export class GlobeEngine {
     const lng = immediate ? this.targetLng : this.currentLng;
     const tilt = immediate ? this.targetAxisTiltDeg : this.axisTiltDeg;
 
-    const phi = (90 - lat) * DEG2RAD;
-    const theta = (lng + 180) * DEG2RAD;
-
-    const px = Math.sin(phi) * Math.cos(theta);
-    const py = Math.cos(phi);
-    const pz = Math.sin(phi) * Math.sin(theta);
+    // ── 相机方向必须与 latLngToVector3 完全同约定 ──
+    // geo.ts 的经纬度→三维换算采用「-x」约定（与 SphereGeometry UV 展开对齐，
+    // 所有标记/网格/弧线都用它）。相机若用别的推导（如 +x），就会飞到镜像
+    // 位置——表现为"定位后标记点不在画面正中"。因此这里直接复用同一函数，
+    // 保证相机指向的永远是该经纬度在贴图上的真实位置。
+    const dir = latLngToVector3(lat, lng, 1);
+    const px = dir.x;
+    const py = dir.y;
+    const pz = dir.z;
 
     this.camera.position.set(this.distance * px, this.distance * py, this.distance * pz);
 
