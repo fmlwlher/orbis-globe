@@ -17,6 +17,7 @@ import {
   formatDistance,
   formatLatLng,
   greatCircleDistance,
+  normalizeCoordInput,
   parseLatitude,
   parseLongitude,
   toCoordInput,
@@ -227,6 +228,17 @@ const Index = () => {
   const handleClearCoord = () => {
     engineRef.current?.clearCoordPoint();
     setCoordError('');
+  };
+
+  /**
+   * 失焦时把输入补全为规范格式（30N → 30°N）。
+   * 只补度符号与规整大小写，不擅自添加方向字母，避免替用户猜方向。
+   */
+  const handleCoordBlur = (field: 'lat' | 'lng') => {
+    setCoordInput((p) => {
+      const next = normalizeCoordInput(p[field], field);
+      return next === p[field] ? p : { ...p, [field]: next };
+    });
   };
 
   const handleScreenshot = () => {
@@ -464,6 +476,7 @@ const Index = () => {
               aria-label="纬度"
               value={coordInput.lat}
               onChange={(e) => setCoordInput((p) => ({ ...p, lat: e.target.value }))}
+              onBlur={() => handleCoordBlur('lat')}
               onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
             />
             <input
@@ -476,6 +489,7 @@ const Index = () => {
               aria-label="经度"
               value={coordInput.lng}
               onChange={(e) => setCoordInput((p) => ({ ...p, lng: e.target.value }))}
+              onBlur={() => handleCoordBlur('lng')}
               onKeyDown={(e) => e.key === 'Enter' && handleLocate()}
             />
           </div>
@@ -492,6 +506,8 @@ const Index = () => {
           ) : (
             <p className="globe-actions__hint">
               数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W
+              <br />
+              输入 30N 离开输入框会自动补全为 30°N
             </p>
           )}
         </section>

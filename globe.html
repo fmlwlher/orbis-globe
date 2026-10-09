@@ -233,7 +233,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
         <button class="g-btn" id="btnLocate">⌾ 定位并标记</button>
         <button class="g-btn" id="btnClearCoord">清除蓝点</button>
       </div>
-      <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W</p>
+      <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N</p>
     </section>
   </aside>
 
@@ -835,13 +835,23 @@ $('btnRotate').addEventListener('click', ()=>{
 $('btnReset').addEventListener('click', ()=>{ setSelected(null); resetView(); idle=0; autoActive=true; });
 
 /* ── 坐标定位交互（数字 + 度符号° + 方向字母） ── */
-/* 解析 30°N / 30°S / 30°n / 30° N 等写法；度符号必填，方向字母不区分大小写 */
+/* 输入容错：补全为规范格式。30N → 30°N，45W → 45°W；缺方向字母时只补度符号 */
+function normalizeCoordInput(raw, kind){
+  const text = String(raw||'').trim();
+  if (!text) return text;
+  // 方向字母不限 NSEW，以便错用字母时也能先把度符号补上
+  const m = text.match(/^(\d+(?:\.\d+)?)\s*°?\s*([NSEWnsew])?$/);
+  if (!m) return text;
+  const suffix = m[2] ? m[2].toUpperCase() : '';
+  return `${m[1]}°${suffix}`;
+}
+/* 解析 30°N / 30°S / 30°n / 30° N 等写法；宽容接受省略度符号的 30N */
 function parseAxis(text, kind){
   const posDir = kind==='lat' ? 'N' : 'E';
   const negDir = kind==='lat' ? 'S' : 'W';
   const label  = kind==='lat' ? '纬度' : '经度';
   const limit  = kind==='lat' ? 90 : 180;
-  const str = String(text||'').trim();
+  const str = normalizeCoordInput(text, kind).trim();
   if (!str) return { error: `请输入${label}` };
   const m = str.match(/^(\d+(?:\.\d+)?)\s*°\s*([NSEWnsew])$/);
   if (!m) return { error: `${label}格式应为「数字°${posDir}/${negDir}」，如 ${kind==='lat'?'30':'45'}°${posDir}` };
@@ -853,7 +863,7 @@ function parseAxis(text, kind){
   if (value < -limit || value > limit) return { error: `${label}需在 ${limit}°${negDir} ~ ${limit}°${posDir} 之间` };
   return { value };
 }
-const coordHint = '数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W';
+const coordHint = '数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N';
 function toCoordText(v, pos, neg){
   if (v === 0) return '0°';
   const a = Math.abs(v);
@@ -876,6 +886,9 @@ function doLocate(){
 $('btnLocate').addEventListener('click', doLocate);
 $('inpLat').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
 $('inpLng').addEventListener('keydown', e=>{ if(e.key==='Enter') doLocate(); });
+/* 失焦时补全为规范格式（30N → 30°N），不擅自添加方向字母 */
+$('inpLat').addEventListener('blur', ()=>{ $('inpLat').value = normalizeCoordInput($('inpLat').value, 'lat'); });
+$('inpLng').addEventListener('blur', ()=>{ $('inpLng').value = normalizeCoordInput($('inpLng').value, 'lng'); });
 $('btnClearCoord').addEventListener('click', ()=>{
   clearCoordPoint();
   const msg=$('coordMsg'); msg.textContent=coordHint; msg.classList.remove('err');

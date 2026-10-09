@@ -122,13 +122,40 @@ export interface ParsedCoord {
 }
 
 /**
+ * 输入容错：把用户随手写的坐标补全为规范格式「数字°方向字母」。
+ *
+ * 主要处理「忘记输入度符号」这一最常见的情况：
+ *   30N  → 30°N      30s  → 30°S
+ *   45e  → 45°E      45W  → 45°W
+ *   30 N → 30°N      30   → 30°（缺方向字母时只补度符号，不擅自假设方向）
+ *
+ * 方向字母即使与当前类别不符也照常补度符号（30E 在纬度框 → 30°E），
+ * 让随后 parseAxis 报出的是「方向字母应为 N 或 S」这个真正的错误。
+ * 已在正确格式（含 °）时仅做去空格与字母大写的规整；无法识别的输入原样返回。
+ */
+export function normalizeCoordInput(raw: string, kind: 'lat' | 'lng'): string {
+  const text = raw.trim();
+  if (!text) return text;
+
+  // 数字 + 可选度符号 + 可选方向字母（允许各段之间有空格）
+  // 注意：方向字母不限 NSEW，以便错用字母时也能先把度符号补上
+  const m = text.match(/^(\d+(?:\.\d+)?)\s*°?\s*([NSEWnsew])?$/);
+  if (!m) return text;
+
+  const [, digits, letter] = m;
+  const suffix = letter ? letter.toUpperCase() : '';
+  return `${digits}°${suffix}`;
+}
+
+/**
  * 解析纬度输入。
  * 格式为「数字 + 度符号° + 方向字母」（字母不区分大小写，度符号必填）：
  *   30°N / 30°n → 北纬 30    30°S / 30°s → 南纬 30
  * 度符号与方向字母之间的空格可有可无（30° N 亦可）。
+ * 同时宽容接受省略度符号的写法（30N），便于用户快速输入。
  */
 export function parseLatitude(raw: string): ParsedCoord {
-  const text = raw.trim();
+  const text = normalizeCoordInput(raw, 'lat');
   if (!text) return { error: '请输入纬度' };
   return parseAxis(text, 'lat');
 }
@@ -137,9 +164,10 @@ export function parseLatitude(raw: string): ParsedCoord {
  * 解析经度输入。
  * 格式为「数字 + 度符号° + 方向字母」：
  *   45°E → 东经 45    45°W → 西经 45
+ * 同样宽容接受省略度符号的写法（45E）。
  */
 export function parseLongitude(raw: string): ParsedCoord {
-  const text = raw.trim();
+  const text = normalizeCoordInput(raw, 'lng');
   if (!text) return { error: '请输入经度' };
   return parseAxis(text, 'lng');
 }
