@@ -78,6 +78,22 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
 .g-chip.on{border-color:var(--chip);color:#fff;background:color-mix(in srgb,var(--chip) 14%,transparent);box-shadow:0 0 16px -4px var(--chip)}
 .g-chip .gl{color:var(--chip);font-size:9px}
 .g-chip .n{font-family:var(--g-mono);font-size:9px;opacity:.6}
+/* ── 图层开关分组（默认折叠，点击标题展开）── */
+.g-groups,.g-group+.g-group{margin-top:0}
+.g-group{border:1px solid var(--g-line);border-radius:3px;overflow:hidden;margin-bottom:6px;transition:border-color .18s}
+.g-group.is-open{border-color:var(--g-line-strong)}
+.g-group-head{width:100%;display:flex;align-items:center;gap:9px;padding:8px 10px;
+  background:rgba(120,190,235,.04);border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:background .15s}
+.g-group-head:hover{background:rgba(120,190,235,.09)}
+.g-group.is-open .g-group-head{background:rgba(120,190,235,.075)}
+.g-group-chev{flex:none;width:0;height:0;border-left:4px solid currentColor;
+  border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;opacity:.55;transition:transform .2s}
+.g-group.is-open .g-group-chev{transform:rotate(90deg)}
+.g-group-tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.g-group-tx b{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--g-text)}
+.g-group-tx em{font-style:normal;font-size:9px;color:var(--g-text-faint)}
+.g-group-count{flex:none;font-family:var(--g-mono);font-size:9px;letter-spacing:.04em;color:var(--g-text-faint);opacity:.85}
+.g-group-body{padding:3px 10px 6px}
 .g-switch{display:flex;align-items:center;gap:11px;padding:6px 3px;cursor:pointer;border-radius:2px}
 .g-switch:hover{background:rgba(120,190,235,.055)}
 .g-switch .tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
@@ -986,20 +1002,50 @@ $('chips').addEventListener('click', e=>{
   if(selected && !catsOn.includes(selected.cat)) setSelected(null);
   $('tMarks').textContent=`${PLACES.filter(p=>catsOn.includes(p.cat)).length} / ${PLACES.length}`;
 });
-const LAYER_DEFS=[
-  ['satellite','卫星影像','真实地表贴图与夜灯'],['grid','经纬网格','网格总开关'],
-  ['meridians','经线','每 15° 一条经圈'],['meridianLabels','经度','标注每条经线的经度'],
-  ['parallels','纬线','含回归线与极圈虚线'],['parallelLabels','纬度','标注每条纬线的纬度'],
-  ['axis','地轴线','贯穿南北极的自转轴'],
-  ['regions','洲洋名','标注七大洲与四大洋'],
-  ['markers','观测标记','城市 / 地标 / 天文台'],['arcs','航线弧光','以北京为枢纽的连线'],
-  ['atmosphere','大气辉光','边缘散射光晕'],['stars','深空星场','远景恒星背景'],
-  ['zoneTint','纬度分带','低/中/高纬度分色（默认关）'],
-  ['hemisphereTint','南北半球','南北半球分色（默认关）'],
-  ['ewTint','东西半球','东西半球分色（默认关）']];
-$('layers').innerHTML=LAYER_DEFS.map(([k,l,h],i)=>`
-  <label class="g-switch"><span class="tx"><b>${l}</b><em>${h}</em></span>
-  <input type="checkbox" data-k="${k}" ${layers[k]?'checked':''}/><span class="g-sw-track"><span class="g-sw-thumb"></span></span></label>`).join('');
+/* 图层开关按功能归为三组，默认全部折叠，点击标题展开 */
+const LAYER_GROUPS=[
+  {id:'graticule',title:'经纬网格',hint:'经线 / 纬线 / 地轴',items:[
+    ['grid','经纬网格','网格总开关'],
+    ['meridians','经线','每 15° 一条经圈'],['meridianLabels','经度','标注每条经线的经度'],
+    ['parallels','纬线','含回归线与极圈虚线'],['parallelLabels','纬度','标注每条纬线的纬度'],
+    ['axis','地轴线','贯穿南北极的自转轴']]},
+  {id:'scene',title:'标注与氛围',hint:'名称 / 标记 / 光效',items:[
+    ['regions','洲洋名','标注七大洲与四大洋'],
+    ['markers','观测标记','城市 / 地标 / 天文台'],['arcs','航线弧光','以北京为枢纽的连线'],
+    ['atmosphere','大气辉光','边缘散射光晕'],['stars','深空星场','远景恒星背景']]},
+  {id:'surface',title:'地表与分区',hint:'影像 / 纬度带 / 半球',items:[
+    ['satellite','卫星影像','真实地表贴图与夜灯'],
+    ['zoneTint','纬度分带','低/中/高纬度分色（默认关）'],
+    ['hemisphereTint','南北半球','南北半球分色（默认关）'],
+    ['ewTint','东西半球','东西半球分色（默认关）']]}];
+$('layers').innerHTML=LAYER_GROUPS.map(g=>`
+  <div class="g-group" data-g="${g.id}">
+    <button type="button" class="g-group-head" aria-expanded="false">
+      <span class="g-group-chev"></span>
+      <span class="g-group-tx"><b>${g.title}</b><em>${g.hint}</em></span>
+      <span class="g-group-count"></span>
+    </button>
+    <div class="g-group-body" hidden>${g.items.map(([k,l,h])=>`
+      <label class="g-switch"><span class="tx"><b>${l}</b><em>${h}</em></span>
+      <input type="checkbox" data-k="${k}" ${layers[k]?'checked':''}/><span class="g-sw-track"><span class="g-sw-thumb"></span></span></label>`).join('')}</div>
+  </div>`).join('');
+/* 折叠交互 + 每组的"已开启/总数"计数 */
+function refreshGroupCounts(){
+  document.querySelectorAll('#layers .g-group').forEach(el=>{
+    const ins=[...el.querySelectorAll('input[data-k]')];
+    el.querySelector('.g-group-count').textContent=
+      `${ins.filter(i=>i.checked).length}/${ins.length}`;
+  });
+}
+refreshGroupCounts();
+$('layers').addEventListener('click', e=>{
+  const head=e.target.closest('.g-group-head'); if(!head) return;
+  const grp=head.parentElement, body=grp.querySelector('.g-group-body');
+  const open=body.hasAttribute('hidden');
+  if(open){ body.removeAttribute('hidden'); } else { body.setAttribute('hidden',''); }
+  grp.classList.toggle('is-open', open);
+  head.setAttribute('aria-expanded', String(open));
+});
 $('layers').addEventListener('change', e=>{
   const k=e.target.dataset.k; layers[k]=e.target.checked;
   switch(k){
@@ -1024,6 +1070,7 @@ $('layers').addEventListener('change', e=>{
       earthMat.needsUpdate = true;
       break;
   }
+  refreshGroupCounts();
 });
 $('search').addEventListener('change', e=>{
   const q=e.target.value.trim().toLowerCase(); if(!q) return;

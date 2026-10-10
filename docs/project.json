@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "修复纬度分带/南北半球/东西半球着色开关不生效的bug(着色器对象挂载位置错误)",
+  "version_description": "图层开关按功能分为三组（经纬网格/标注与氛围/地表与分区），每组默认折叠点击展开",
   "preview_type": "pc"
 }

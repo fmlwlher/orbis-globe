@@ -36,22 +36,52 @@ const CATEGORY_ORDER: Category[] = [
   'observatory',
 ];
 
-const LAYER_LABELS: { key: LayerKey; label: string; hint: string }[] = [
-  { key: 'satellite', label: '卫星影像', hint: '真实地表贴图与夜灯' },
-  { key: 'grid', label: '经纬网格', hint: '网格总开关' },
-  { key: 'meridians', label: '经线', hint: '每 15° 一条经圈' },
-  { key: 'meridianLabels', label: '经度', hint: '标注每条经线的经度' },
-  { key: 'parallels', label: '纬线', hint: '含回归线与极圈虚线' },
-  { key: 'parallelLabels', label: '纬度', hint: '标注每条纬线的纬度' },
-  { key: 'axis', label: '地轴线', hint: '贯穿南北极的自转轴' },
-  { key: 'regions', label: '洲洋名', hint: '标注七大洲与四大洋' },
-  { key: 'markers', label: '观测标记', hint: '城市 / 地标 / 天文台' },
-  { key: 'arcs', label: '航线弧光', hint: '以北京为枢纽的连线' },
-  { key: 'atmosphere', label: '大气辉光', hint: '边缘散射光晕' },
-  { key: 'stars', label: '深空星场', hint: '远景恒星背景' },
-  { key: 'zoneTint', label: '纬度分带', hint: '低/中/高纬度分色（默认关）' },
-  { key: 'hemisphereTint', label: '南北半球', hint: '南北半球分色（默认关）' },
-  { key: 'ewTint', label: '东西半球', hint: '东西半球分色（默认关）' },
+/**
+ * 图层开关按功能归为三组，每组默认折叠。
+ * 分组顺序即界面展示顺序。
+ */
+const LAYER_GROUPS: {
+  id: string;
+  title: string;
+  hint: string;
+  items: { key: LayerKey; label: string; hint: string }[];
+}[] = [
+  {
+    id: 'graticule',
+    title: '经纬网格',
+    hint: '经线 / 纬线 / 地轴',
+    items: [
+      { key: 'grid', label: '经纬网格', hint: '网格总开关' },
+      { key: 'meridians', label: '经线', hint: '每 15° 一条经圈' },
+      { key: 'meridianLabels', label: '经度', hint: '标注每条经线的经度' },
+      { key: 'parallels', label: '纬线', hint: '含回归线与极圈虚线' },
+      { key: 'parallelLabels', label: '纬度', hint: '标注每条纬线的纬度' },
+      { key: 'axis', label: '地轴线', hint: '贯穿南北极的自转轴' },
+    ],
+  },
+  {
+    id: 'scene',
+    title: '标注与氛围',
+    hint: '名称 / 标记 / 光效',
+    items: [
+      { key: 'regions', label: '洲洋名', hint: '标注七大洲与四大洋' },
+      { key: 'markers', label: '观测标记', hint: '城市 / 地标 / 天文台' },
+      { key: 'arcs', label: '航线弧光', hint: '以北京为枢纽的连线' },
+      { key: 'atmosphere', label: '大气辉光', hint: '边缘散射光晕' },
+      { key: 'stars', label: '深空星场', hint: '远景恒星背景' },
+    ],
+  },
+  {
+    id: 'surface',
+    title: '地表与分区',
+    hint: '影像 / 纬度带 / 半球',
+    items: [
+      { key: 'satellite', label: '卫星影像', hint: '真实地表贴图与夜灯' },
+      { key: 'zoneTint', label: '纬度分带', hint: '低/中/高纬度分色（默认关）' },
+      { key: 'hemisphereTint', label: '南北半球', hint: '南北半球分色（默认关）' },
+      { key: 'ewTint', label: '东西半球', hint: '东西半球分色（默认关）' },
+    ],
+  },
 ];
 
 const Index = () => {
@@ -90,6 +120,8 @@ const Index = () => {
     ewTint: false,
   });
   const [autoRotate, setAutoRotate] = useState(true);
+  // 图层开关分组折叠状态：默认全部折叠
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState('');
   // 坐标输入：初始值从 localStorage 恢复上次定位的坐标（刷新后保留）
   const [coordInput, setCoordInput] = useState(() => {
@@ -487,26 +519,53 @@ const Index = () => {
           <h2 className="globe-card__title">
             <span className="globe-card__index">02</span>图层开关
           </h2>
-          <ul className="globe-layers">
-            {LAYER_LABELS.map(({ key, label, hint }) => (
-              <li key={key}>
-                <label className="globe-switch">
-                  <span className="globe-switch__text">
-                    <strong>{label}</strong>
-                    <em>{hint}</em>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={layers[key]}
-                    onChange={(e) => setLayers((prev) => ({ ...prev, [key]: e.target.checked }))}
-                  />
-                  <span className="globe-switch__track" aria-hidden>
-                    <span className="globe-switch__thumb" />
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
+          <div className="globe-groups">
+            {LAYER_GROUPS.map((group) => {
+              const open = !!openGroups[group.id];
+              const onCount = group.items.filter((it) => layers[it.key]).length;
+              return (
+                <div className={`globe-group${open ? ' is-open' : ''}`} key={group.id}>
+                  <button
+                    type="button"
+                    className="globe-group__head"
+                    aria-expanded={open}
+                    onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
+                  >
+                    <span className="globe-group__chevron" aria-hidden />
+                    <span className="globe-group__text">
+                      <strong>{group.title}</strong>
+                      <em>{group.hint}</em>
+                    </span>
+                    <span className="globe-group__count">
+                      {onCount}/{group.items.length}
+                    </span>
+                  </button>
+                  <ul className="globe-layers" hidden={!open}>
+                    {group.items.map(({ key, label, hint }) => (
+                      <li key={key}>
+                        <label className="globe-switch">
+                          <span className="globe-switch__text">
+                            <strong>{label}</strong>
+                            <em>{hint}</em>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={layers[key]}
+                            onChange={(e) =>
+                              setLayers((prev) => ({ ...prev, [key]: e.target.checked }))
+                            }
+                          />
+                          <span className="globe-switch__track" aria-hidden>
+                            <span className="globe-switch__thumb" />
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         </section>
 
         <section className="globe-card globe-card--compact">
