@@ -1529,8 +1529,13 @@ export class GlobeEngine {
       if (this.autoRotate && !this.focusHold && this.userIdleTimer > 1.6) {
         this.autoRotateActive = true;
         const speed = this.autoRotateSpeed * (this.distance / 3.1);
-        this.targetLng += speed;
-        this.currentLng += speed;
+        // 地球自西向东自转，从北极上方俯视应为逆时针（非洲等陆地自东向西
+        // 掠过视野，即屏幕上的陆地向左移动）。
+        // 引擎是用相机绕地轴公转来模拟自转的，相机与地表的视运动方向相反，
+        // 因此需要让相机经度「递减」才能得到地表的逆时针自转。
+        // （写成 += 会让地表在屏幕上向右移动，表现为顺时针，与真实自转相反。）
+        this.targetLng -= speed;
+        this.currentLng -= speed;
       } else if (this.autoRotate) {
         this.autoRotateActive = false;
       }

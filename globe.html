@@ -1317,7 +1317,9 @@ renderer.setAnimationLoop(()=>{
     }
     idle+=dt;
     /* focusHold 期间不自转：定位/选中某点后需让它稳定停在画面正中 */
-    if(autoRot&&!focusHold&&idle>1.6){ autoActive=true; const s=.045*(dist/3.1); tLng+=s; cLng+=s; }
+    /* 地球自西向东自转，俯视北极为逆时针：相机与地表的视运动方向相反，
+       故相机经度递减（写成 += 会让陆地在屏幕上右移，呈顺时针，与真实自转相反） */
+    if(autoRot&&!focusHold&&idle>1.6){ autoActive=true; const s=.045*(dist/3.1); tLng-=s; cLng-=s; }
     else if(autoRot) autoActive=false;
   }
 
