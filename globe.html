@@ -455,10 +455,11 @@ const earthMat = new THREE.MeshPhongMaterial({
 const pendingToggles = {};
 /* 切换地表着色器里的某个地理分区开关 */
 function setShaderToggle(name, on){
+  const v = on ? 1 : 0;
+  /* 始终同步暂存区：satellite 开关会触发材质重编译，重编译后从这里恢复状态 */
+  pendingToggles[name] = v;
   const sh = earthMat.userData && earthMat.userData.shader;
-  if (sh && sh.uniforms && sh.uniforms[name]) { sh.uniforms[name].value = on ? 1 : 0; return; }
-  /* 尚未编译：暂存，onBeforeCompile 里会读取并初始化 */
-  pendingToggles[name] = on ? 1 : 0;
+  if (sh && sh.uniforms && sh.uniforms[name]) { sh.uniforms[name].value = v; }
 }
 earthMat.onBeforeCompile = (sh) => {
   sh.uniforms.uNightMap = { value: tex(TEX.night) };

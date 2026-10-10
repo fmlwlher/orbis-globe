@@ -1398,15 +1398,19 @@ export class GlobeEngine {
    * 否则（首次在编译前调用）先记在 pendingToggles，等编译完成时补上。
    */
   private setShaderToggle(name: 'uZoneEnable' | 'uHemisphereEnable' | 'uEwEnable', on: boolean) {
-    const shader = this.earthMesh?.userData?.shader as
+    const value = on ? 1 : 0;
+    // 始终同步暂存区：satellite 开关会置 needsUpdate 触发材质重编译，
+    // 重编译后 onBeforeCompile 会从这里读取初始值，保证状态不丢失
+    this.pendingToggles[name] = value;
+    // 注意：着色器对象保存在 material.userData.shader（见 onBeforeCompile 末尾），
+    // 而不是 mesh.userData —— 两者是不同的对象
+    const mat = this.earthMesh?.material as THREE.MeshPhongMaterial | undefined;
+    const shader = mat?.userData?.shader as
       | { uniforms: Record<string, { value: number }> }
       | undefined;
     if (shader?.uniforms?.[name]) {
-      shader.uniforms[name].value = on ? 1 : 0;
-      return;
+      shader.uniforms[name].value = value;
     }
-    // 尚未编译：暂存，onBeforeCompile 里会读取并初始化
-    this.pendingToggles[name] = on ? 1 : 0;
   }
 
   /** 着色器编译完成前调用的开关值暂存区 */
