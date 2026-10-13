@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Improve tint contrast, complete labels, adjust defaults",
+  "version_description": "Label every 15-degree parallel and meridian",
   "preview_type": "pc"
 }

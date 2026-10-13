@@ -727,9 +727,13 @@ export class GlobeEngine {
     this.gridGroup.add(this.meridianGroup);
 
     // ── 经度数值标注 ──
-    // 覆盖 -180°~150°（步长 30），其中 -180 归一化为 180°（不带方向字母）
+    // 每条经线都标注（-180°~165°，步长 15°），其中 -180 归一化为 180°（不带方向字母）；
+    // 另外单独补上东西半球分界线 20°W / 160°E（它们不在 15° 序列上）。
     this.meridianLabelGroup = new THREE.Group();
-    for (let lng = -180; lng < 180; lng += 30) {
+    const meridianLabelLngs: number[] = [];
+    for (let lng = -180; lng < 180; lng += 15) meridianLabelLngs.push(lng);
+    meridianLabelLngs.push(-20, 160); // 东西半球分界线
+    for (const lng of meridianLabelLngs) {
       const label = formatDegree(lng === -180 ? 180 : lng, 'lng');
       this.meridianLabelGroup.add(
         this.makeLabelSprite(label, latLngToVector3(-2, lng, r * 1.012))
@@ -758,14 +762,26 @@ export class GlobeEngine {
     this.gridGroup.add(this.parallelGroup);
 
     // ── 纬度数值标注 ──
-    // 覆盖 0°、±30°、±60°、±90°（含赤道与南北极点，此前遗漏）
+    // 每条 15° 纬线都标注（0°、±15°、±30°、±45°、±60°、±75°），
+    // 另加南北回归线 ±23.44°；南北极点 ±90° 也一并标出。
     this.parallelLabelGroup = new THREE.Group();
-    for (const lat of [0, 30, -30, 60, -60, 90, -90]) {
-      // 极点处经度无意义，放在经度 0 附近；其余放在 14°E/W 两侧
+    const parallelLabelLats: { lat: number; text: string }[] = [];
+    for (let lat = -75; lat <= 75; lat += 15) {
+      parallelLabelLats.push({ lat, text: formatDegree(lat, 'lat') });
+    }
+    // 南北回归线（纬线为虚线绘制，标注用「23.44°N/S」精确值）
+    parallelLabelLats.push({ lat: 23.44, text: '23.44°N' });
+    parallelLabelLats.push({ lat: -23.44, text: '23.44°S' });
+    // 南北极点
+    parallelLabelLats.push({ lat: 90, text: '90°N' });
+    parallelLabelLats.push({ lat: -90, text: '90°S' });
+
+    for (const { lat, text } of parallelLabelLats) {
+      // 极点处经度无意义，放在经度 0 附近；其余放在 14°E / 14°W 两侧
       const lngs = Math.abs(lat) === 90 ? [0] : [-14, 14];
       for (const lng of lngs) {
         this.parallelLabelGroup.add(
-          this.makeLabelSprite(formatDegree(lat, 'lat'), latLngToVector3(lat, lng, r * 1.012))
+          this.makeLabelSprite(text, latLngToVector3(lat, lng, r * 1.012))
         );
       }
     }

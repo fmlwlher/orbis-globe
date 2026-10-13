@@ -693,12 +693,17 @@ function buildMeridianBand(lng, radius, width){
   layerG.meridians.add(buildMeridianBand(160, r*1.003, .0065));
   grid.add(layerG.meridians);
 
-  // 经度数值
+  // 经度数值（每条经线都标，步长 15°；另补东西半球分界线 20°W / 160°E）
   layerG.meridianLabels = new THREE.Group();
-  for (let lng=-180; lng<180; lng+=30){
-    const lb = fmtDeg(lng === -180 ? 180 : lng, 'lng');
-    layerG.meridianLabels.add(makeLabel(lb, llToV(-2,lng,r*1.012)));
-    layerG.meridianLabels.add(makeLabel(lb, llToV(2,lng,r*1.012)));
+  {
+    const lbLngs = [];
+    for (let lng=-180; lng<180; lng+=15) lbLngs.push(lng);
+    lbLngs.push(-20, 160);
+    for (const lng of lbLngs){
+      const lb = fmtDeg(lng === -180 ? 180 : lng, 'lng');
+      layerG.meridianLabels.add(makeLabel(lb, llToV(-2,lng,r*1.012)));
+      layerG.meridianLabels.add(makeLabel(lb, llToV(2,lng,r*1.012)));
+    }
   }
   grid.add(layerG.meridianLabels);
 
@@ -714,12 +719,18 @@ function buildMeridianBand(lng, radius, width){
   }
   grid.add(layerG.parallels);
 
-  // 纬度数值（0°、±30°、±60°、±90°，含赤道与南北极点）
+  // 纬度数值（每条 15° 纬线 + 南北回归线 ±23.44° + 南北极点 ±90°）
   layerG.parallelLabels = new THREE.Group();
-  for (const lat of [0,30,-30,60,-60,90,-90]){
-    const lngs = Math.abs(lat)===90 ? [0] : [-14,14];
-    for (const lng of lngs){
-      layerG.parallelLabels.add(makeLabel(fmtDeg(lat,'lat'), llToV(lat,lng,r*1.012)));
+  {
+    const latItems = [];
+    for (let lat=-75; lat<=75; lat+=15) latItems.push([lat, fmtDeg(lat,'lat')]);
+    latItems.push([23.44,'23.44°N'], [-23.44,'23.44°S']);
+    latItems.push([90,'90°N'], [-90,'90°S']);
+    for (const [lat, text] of latItems){
+      const lngs = Math.abs(lat)===90 ? [0] : [-14,14];
+      for (const lng of lngs){
+        layerG.parallelLabels.add(makeLabel(text, llToV(lat,lng,r*1.012)));
+      }
     }
   }
   grid.add(layerG.parallelLabels);
