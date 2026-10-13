@@ -104,17 +104,18 @@ const Index = () => {
   const [layers, setLayers] = useState<LayerVisibility>({
     satellite: true,
     grid: true,
-    meridians: true,
-    meridianLabels: true,
-    parallels: true,
-    parallelLabels: true,
+    // 以下默认关闭：经线/经度/纬线/纬度/航线弧光/大气辉光/深空星场
+    // 以及三个地理分区着色开关
+    meridians: false,
+    meridianLabels: false,
+    parallels: false,
+    parallelLabels: false,
     axis: true,
     regions: true,
     markers: true,
-    arcs: true,
-    atmosphere: true,
-    stars: true,
-    // 三个地理分区着色：默认关闭
+    arcs: false,
+    atmosphere: false,
+    stars: false,
     zoneTint: false,
     hemisphereTint: false,
     ewTint: false,

@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Fix Earth rotation direction to counterclockwise",
+  "version_description": "Improve tint contrast, complete labels, adjust defaults",
   "preview_type": "pc"
 }

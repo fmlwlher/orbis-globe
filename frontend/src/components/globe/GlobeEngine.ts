@@ -493,57 +493,54 @@ export class GlobeEngine {
            float regionAmt = 0.0;
 
            // ── 1) 低 / 中 / 高纬度带（0-30 / 30-60 / 60-90）──
+           // 三个色相拉开到红 → 绿 → 蓝，互为对立色，辨识度最高
            if (uZoneEnable > 0.5) {
              float absLat = abs(fLat);
-             vec3 zc;
-             if (absLat < 30.0) {
-               zc = vec3(0.98, 0.72, 0.25);   // 低纬度：暖橙
-             } else if (absLat < 60.0) {
-               zc = vec3(0.36, 0.90, 0.62);   // 中纬度：青绿
-             } else {
-               zc = vec3(0.55, 0.66, 0.98);   // 高纬度：淡蓝紫
-             }
              // 分界线处做 1.5° 的平滑过渡，避免硬边
              float e1 = smoothstep(28.5, 31.5, absLat);
              float e2 = smoothstep(58.5, 61.5, absLat);
-             vec3 blend = mix(mix(vec3(0.98, 0.72, 0.25), vec3(0.36, 0.90, 0.62), e1),
-                              vec3(0.55, 0.66, 0.98), e2);
-             regionTint += blend * 0.42;
-             regionAmt += 0.42;
+             vec3 low  = vec3(1.00, 0.24, 0.16);   // 低纬度：猩红
+             vec3 mid  = vec3(0.10, 0.92, 0.30);   // 中纬度：荧光绿
+             vec3 high = vec3(0.16, 0.40, 1.00);   // 高纬度：宝蓝
+             vec3 blend = mix(mix(low, mid, e1), high, e2);
+             regionTint += blend * 0.78;
+             regionAmt += 0.78;
            }
 
            // ── 2) 南 / 北半球 ──
+           // 暖橙 vs 亮青，色相相隔约 180°，冷暖对立
            if (uHemisphereEnable > 0.5) {
              float northMix = smoothstep(-2.0, 2.0, fLat);  // 赤道处平滑过渡
-             vec3 hc = mix(vec3(0.42, 0.78, 1.0),          // 南半球：冷蓝
-                           vec3(1.0, 0.62, 0.48),          // 北半球：暖珊瑚
+             vec3 hc = mix(vec3(0.00, 0.85, 0.95),          // 南半球：亮青
+                           vec3(1.00, 0.45, 0.00),          // 北半球：橙红
                            northMix);
-             regionTint += hc * 0.40;
-             regionAmt += 0.40;
+             regionTint += hc * 0.78;
+             regionAmt += 0.78;
            }
 
            // ── 3) 东 / 西半球（20°W 向东 → 160°E 为东半球）──
+           // 紫 vs 柠檬黄，也是互补色组合
            if (uEwEnable > 0.5) {
              // 把经度映射到以 20°W 为起点的 [0,360) 区间：
              // t < 180 表示向东 180°（即到 160°E）→ 东半球
              float t = mod(fLngRaw + 20.0 + 360.0, 360.0);
              // 在两条分界线（0 与 180）附近做平滑过渡
              float eastW = smoothstep(0.0, 4.0, t) * (1.0 - smoothstep(176.0, 180.0, t));
-             vec3 ew = mix(vec3(0.98, 0.52, 0.72),   // 西半球：品红
-                           vec3(0.40, 0.92, 0.88),   // 东半球：青
+             vec3 ew = mix(vec3(0.62, 0.10, 0.95),   // 西半球：紫
+                           vec3(0.98, 0.88, 0.10),   // 东半球：柠檬黄
                            eastW);
-             regionTint += ew * 0.40;
-             regionAmt += 0.40;
+             regionTint += ew * 0.78;
+             regionAmt += 0.78;
            }
 
            if (regionAmt > 0.0) {
-             // 分区色以"染色"方式叠加：保留原有明暗与地形，只偏移色相
+             // 分区色以高饱和方式覆盖，同时保留地形与昼夜明暗层次
              vec3 tint = regionTint / max(regionAmt, 0.001);
-             float strength = clamp(regionAmt, 0.0, 0.85);
-             // 与已有颜色做柔和混合，避免盖掉海陆与昼夜层次
-             gl_FragColor.rgb = mix(gl_FragColor.rgb,
-                                    gl_FragColor.rgb * 0.35 + tint * (0.45 + 0.55 * globeLuma(gl_FragColor.rgb)),
-                                    strength);
+             float strength = clamp(regionAmt, 0.0, 0.88);
+             // 用亮度调制保留明暗，但色相完全由分区色决定，确保区分度
+             float l = globeLuma(gl_FragColor.rgb);
+             vec3 shaded = tint * (0.42 + 0.78 * l);
+             gl_FragColor.rgb = mix(gl_FragColor.rgb, shaded, strength);
            }
 
            // ── 夜面城市灯光与冷色氛围 ──
@@ -730,13 +727,15 @@ export class GlobeEngine {
     this.gridGroup.add(this.meridianGroup);
 
     // ── 经度数值标注 ──
+    // 覆盖 -180°~150°（步长 30），其中 -180 归一化为 180°（不带方向字母）
     this.meridianLabelGroup = new THREE.Group();
     for (let lng = -180; lng < 180; lng += 30) {
+      const label = formatDegree(lng === -180 ? 180 : lng, 'lng');
       this.meridianLabelGroup.add(
-        this.makeLabelSprite(formatDegree(lng, 'lng'), latLngToVector3(-2, lng, r * 1.012))
+        this.makeLabelSprite(label, latLngToVector3(-2, lng, r * 1.012))
       );
       this.meridianLabelGroup.add(
-        this.makeLabelSprite(formatDegree(lng, 'lng'), latLngToVector3(2, lng, r * 1.012))
+        this.makeLabelSprite(label, latLngToVector3(2, lng, r * 1.012))
       );
     }
     this.gridGroup.add(this.meridianLabelGroup);
@@ -759,15 +758,16 @@ export class GlobeEngine {
     this.gridGroup.add(this.parallelGroup);
 
     // ── 纬度数值标注 ──
+    // 覆盖 0°、±30°、±60°、±90°（含赤道与南北极点，此前遗漏）
     this.parallelLabelGroup = new THREE.Group();
-    for (let lat = -75; lat <= 75; lat += 30) {
-      if (lat === 0) continue;
-      this.parallelLabelGroup.add(
-        this.makeLabelSprite(formatDegree(lat, 'lat'), latLngToVector3(lat, -14, r * 1.012))
-      );
-      this.parallelLabelGroup.add(
-        this.makeLabelSprite(formatDegree(lat, 'lat'), latLngToVector3(lat, 14, r * 1.012))
-      );
+    for (const lat of [0, 30, -30, 60, -60, 90, -90]) {
+      // 极点处经度无意义，放在经度 0 附近；其余放在 14°E/W 两侧
+      const lngs = Math.abs(lat) === 90 ? [0] : [-14, 14];
+      for (const lng of lngs) {
+        this.parallelLabelGroup.add(
+          this.makeLabelSprite(formatDegree(lat, 'lat'), latLngToVector3(lat, lng, r * 1.012))
+        );
+      }
     }
     this.gridGroup.add(this.parallelLabelGroup);
 

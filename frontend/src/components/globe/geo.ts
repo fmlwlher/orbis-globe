@@ -111,6 +111,8 @@ export function formatDistance(km: number): string {
 /** 经纬度数值的紧凑标签，用于网格度数标注（12°N / 105°E） */
 export function formatDegree(value: number, kind: 'lat' | 'lng'): string {
   if (value === 0) return '0°';
+  // 180°W 与 180°E 是同一条经线（国际日期变更线），不加方向字母以免歧义
+  if (kind === 'lng' && Math.abs(value) === 180) return '180°';
   const dir = kind === 'lat' ? (value > 0 ? 'N' : 'S') : value > 0 ? 'E' : 'W';
   return `${Math.abs(Math.round(value))}°${dir}`;
 }
