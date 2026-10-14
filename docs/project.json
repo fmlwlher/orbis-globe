@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Label every 15-degree parallel and meridian",
+  "version_description": "Set tropics to 23.5 degrees, label polar circles",
   "preview_type": "pc"
 }

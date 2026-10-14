@@ -751,8 +751,8 @@ export class GlobeEngine {
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       this.parallelGroup.add(new THREE.Line(geo, lat === 0 ? accent : mat));
     }
-    // ── 回归线（±23.44°）与极圈（±66.56°）：虚线 ──
-    for (const lat of [23.44, -23.44, 66.56, -66.56]) {
+    // ── 回归线（±23.5°）与极圈（±66.5°）：虚线 ──
+    for (const lat of [23.5, -23.5, 66.5, -66.5]) {
       const pts = this.buildCirclePoints('parallel', lat, r);
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       const line = new THREE.Line(geo, specialMat);
@@ -763,15 +763,18 @@ export class GlobeEngine {
 
     // ── 纬度数值标注 ──
     // 每条 15° 纬线都标注（0°、±15°、±30°、±45°、±60°、±75°），
-    // 另加南北回归线 ±23.44°；南北极点 ±90° 也一并标出。
+    // 另加南北回归线 ±23.5°、南北极圈 ±66.5°，以及南北极点 ±90°。
     this.parallelLabelGroup = new THREE.Group();
     const parallelLabelLats: { lat: number; text: string }[] = [];
     for (let lat = -75; lat <= 75; lat += 15) {
       parallelLabelLats.push({ lat, text: formatDegree(lat, 'lat') });
     }
-    // 南北回归线（纬线为虚线绘制，标注用「23.44°N/S」精确值）
-    parallelLabelLats.push({ lat: 23.44, text: '23.44°N' });
-    parallelLabelLats.push({ lat: -23.44, text: '23.44°S' });
+    // 南北回归线（虚线绘制，不落在 15° 序列上）
+    parallelLabelLats.push({ lat: 23.5, text: '23.5°N' });
+    parallelLabelLats.push({ lat: -23.5, text: '23.5°S' });
+    // 南北极圈（虚线绘制，不落在 15° 序列上）
+    parallelLabelLats.push({ lat: 66.5, text: '66.5°N' });
+    parallelLabelLats.push({ lat: -66.5, text: '66.5°S' });
     // 南北极点
     parallelLabelLats.push({ lat: 90, text: '90°N' });
     parallelLabelLats.push({ lat: -90, text: '90°S' });
