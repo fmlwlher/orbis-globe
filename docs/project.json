@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Fix sidebar scrollbar cursor and drag behavior",
+  "version_description": "Thicken and brighten graticule lines",
   "preview_type": "pc"
 }
