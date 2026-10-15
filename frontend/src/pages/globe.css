@@ -656,11 +656,6 @@
   letter-spacing: 0.03em;
   color: var(--g-text-faint);
 }
-.globe-actions__hint--axis {
-  margin-top: 5px;
-  color: var(--g-amber);
-  opacity: 0.72;
-}
 
 /* ── 坐标定位 ───────────────────────────────────────── */
 .globe-btn--sm {

@@ -114,7 +114,6 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
 .g-btn:active{transform:translateY(1px)}
 .g-btn.primary{border-color:var(--g-amber-dim);color:var(--g-amber);background:rgba(255,181,71,.09)}
 .g-btn.primary:hover{border-color:var(--g-amber);box-shadow:0 0 18px -6px var(--g-amber)}
-.axis-hint{color:var(--g-amber);opacity:.72}
 .g-coord{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
 .g-coord-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .g-coord-tip{margin:0;font-family:var(--g-mono);font-size:9px;line-height:1.35;letter-spacing:.02em;color:#ffb4b4;
@@ -239,7 +238,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
         <button class="g-btn" id="btnLocate">⌾ 定位并标记</button>
         <button class="g-btn" id="btnClearCoord">清除蓝点</button>
       </div>
-      <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N；刷新页面会保留上次坐标</p>
+      <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W</p>
     </section>
     <section class="g-card">
       <h2><span class="ix">02</span>观测站检索</h2>
@@ -262,7 +261,6 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
         <button class="g-btn" id="btnShot">⤓ 导出画面</button>
       </div>
       <p class="g-hint">按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情</p>
-      <p class="g-hint axis-hint">复位后地轴与水平线成 66.5°，向右倾斜</p>
     </section>
   </aside>
 
@@ -1186,7 +1184,7 @@ function parseAxis(text, kind){
   if (value < -limit || value > limit) return { error: `${label}需在 ${limit}°${negDir} ~ ${limit}°${posDir} 之间` };
   return { value };
 }
-const coordHint = '数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W；输入 30N 会自动补全为 30°N；刷新页面会保留上次坐标';
+const coordHint = '数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W';
 function toCoordText(v, pos, neg){
   if (v === 0) return '0°';
   const a = Math.abs(v);

@@ -525,8 +525,6 @@ const Index = () => {
           ) : (
             <p className="globe-actions__hint">
               数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W
-              <br />
-              输入 30N 离开输入框会自动补全为 30°N；刷新页面会保留上次坐标
             </p>
           )}
         </section>
@@ -661,9 +659,6 @@ const Index = () => {
           </div>
           <p className="globe-actions__hint">
             按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情
-          </p>
-          <p className="globe-actions__hint globe-actions__hint--axis">
-            复位后地轴与水平线成 66.5°，向右倾斜
           </p>
         </section>
       </aside>
