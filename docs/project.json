@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Fix parallels ribbon degeneration",
+  "version_description": "Remove redundant hint texts from panels",
   "preview_type": "pc"
 }
