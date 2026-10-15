@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Replace day texture with new Blue Marble",
+  "version_description": "Reorder cards attitude control to second",
   "preview_type": "pc"
 }
