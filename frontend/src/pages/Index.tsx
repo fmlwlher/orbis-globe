@@ -460,145 +460,9 @@ const Index = () => {
         <>
           {/* ══ 左侧控制台 ═════════════════════════════════ */}
           <aside className="globe-panel globe-panel--left">
-        <section className="globe-card">
-          <h2 className="globe-card__title">
-            <span className="globe-card__index">01</span>观测站检索
-          </h2>
-          <div className="globe-search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="城市 / 国家 / 英文名…"
-              aria-label="检索观测站"
-            />
-          </div>
-
-          {searchResults.length > 0 && (
-            <ul className="globe-search__results">
-              {searchResults.map((p) => (
-                <li key={p.id}>
-                  <button type="button" onClick={() => flyTo(p)}>
-                    <span
-                      className="globe-dot"
-                      style={{ background: CATEGORY_META[p.category].color }}
-                    />
-                    <span className="globe-search__name">{p.name}</span>
-                    <span className="globe-search__country">{p.country}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="globe-chips">
-            {CATEGORY_ORDER.map((cat) => {
-              const meta = CATEGORY_META[cat];
-              const active = activeCategories.includes(cat);
-              const count = PLACES.filter((p) => p.category === cat).length;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  className={`globe-chip${active ? ' is-active' : ''}`}
-                  style={{ '--chip': meta.color } as React.CSSProperties}
-                  onClick={() => toggleCategory(cat)}
-                >
-                  <span className="globe-chip__glyph">{meta.glyph}</span>
-                  {meta.label}
-                  <span className="globe-chip__count">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="globe-card">
-          <h2 className="globe-card__title">
-            <span className="globe-card__index">02</span>图层开关
-          </h2>
-          <div className="globe-groups">
-            {LAYER_GROUPS.map((group) => {
-              const open = !!openGroups[group.id];
-              const onCount = group.items.filter((it) => layers[it.key]).length;
-              return (
-                <div className={`globe-group${open ? ' is-open' : ''}`} key={group.id}>
-                  <button
-                    type="button"
-                    className="globe-group__head"
-                    aria-expanded={open}
-                    onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
-                  >
-                    <span className="globe-group__chevron" aria-hidden />
-                    <span className="globe-group__text">
-                      <strong>{group.title}</strong>
-                      <em>{group.hint}</em>
-                    </span>
-                    <span className="globe-group__count">
-                      {onCount}/{group.items.length}
-                    </span>
-                  </button>
-                  <ul className="globe-layers" hidden={!open}>
-                    {group.items.map(({ key, label, hint }) => (
-                      <li key={key}>
-                        <label className="globe-switch">
-                          <span className="globe-switch__text">
-                            <strong>{label}</strong>
-                            <em>{hint}</em>
-                          </span>
-                          <input
-                            type="checkbox"
-                            checked={layers[key]}
-                            onChange={(e) =>
-                              setLayers((prev) => ({ ...prev, [key]: e.target.checked }))
-                            }
-                          />
-                          <span className="globe-switch__track" aria-hidden>
-                            <span className="globe-switch__thumb" />
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
         <section className="globe-card globe-card--compact">
           <h2 className="globe-card__title">
-            <span className="globe-card__index">03</span>姿态控制
-          </h2>
-          <div className="globe-actions">
-            <button
-              type="button"
-              className={`globe-btn${autoRotate ? ' is-primary' : ''}`}
-              onClick={() => setAutoRotate((v) => !v)}
-            >
-              {autoRotate ? '❙❙ 暂停自转' : '▶ 开启自转'}
-            </button>
-            <button type="button" className="globe-btn" onClick={handleReset}>
-              ⌖ 复位视角
-            </button>
-            <button type="button" className="globe-btn" onClick={handleScreenshot}>
-              ⤓ 导出画面
-            </button>
-          </div>
-          <p className="globe-actions__hint">
-            按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情
-          </p>
-          <p className="globe-actions__hint globe-actions__hint--axis">
-            复位后地轴与水平线成 66.5°，向右倾斜
-          </p>
-        </section>
-
-        <section className="globe-card globe-card--compact">
-          <h2 className="globe-card__title">
-            <span className="globe-card__index">04</span>坐标定位
+            <span className="globe-card__index">01</span>坐标定位
           </h2>
           <div className="globe-coord">
             <div className="globe-coord__field">
@@ -665,6 +529,142 @@ const Index = () => {
               输入 30N 离开输入框会自动补全为 30°N；刷新页面会保留上次坐标
             </p>
           )}
+        </section>
+
+        <section className="globe-card">
+          <h2 className="globe-card__title">
+            <span className="globe-card__index">02</span>观测站检索
+          </h2>
+          <div className="globe-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="城市 / 国家 / 英文名…"
+              aria-label="检索观测站"
+            />
+          </div>
+
+          {searchResults.length > 0 && (
+            <ul className="globe-search__results">
+              {searchResults.map((p) => (
+                <li key={p.id}>
+                  <button type="button" onClick={() => flyTo(p)}>
+                    <span
+                      className="globe-dot"
+                      style={{ background: CATEGORY_META[p.category].color }}
+                    />
+                    <span className="globe-search__name">{p.name}</span>
+                    <span className="globe-search__country">{p.country}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="globe-chips">
+            {CATEGORY_ORDER.map((cat) => {
+              const meta = CATEGORY_META[cat];
+              const active = activeCategories.includes(cat);
+              const count = PLACES.filter((p) => p.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`globe-chip${active ? ' is-active' : ''}`}
+                  style={{ '--chip': meta.color } as React.CSSProperties}
+                  onClick={() => toggleCategory(cat)}
+                >
+                  <span className="globe-chip__glyph">{meta.glyph}</span>
+                  {meta.label}
+                  <span className="globe-chip__count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="globe-card">
+          <h2 className="globe-card__title">
+            <span className="globe-card__index">03</span>图层开关
+          </h2>
+          <div className="globe-groups">
+            {LAYER_GROUPS.map((group) => {
+              const open = !!openGroups[group.id];
+              const onCount = group.items.filter((it) => layers[it.key]).length;
+              return (
+                <div className={`globe-group${open ? ' is-open' : ''}`} key={group.id}>
+                  <button
+                    type="button"
+                    className="globe-group__head"
+                    aria-expanded={open}
+                    onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
+                  >
+                    <span className="globe-group__chevron" aria-hidden />
+                    <span className="globe-group__text">
+                      <strong>{group.title}</strong>
+                      <em>{group.hint}</em>
+                    </span>
+                    <span className="globe-group__count">
+                      {onCount}/{group.items.length}
+                    </span>
+                  </button>
+                  <ul className="globe-layers" hidden={!open}>
+                    {group.items.map(({ key, label, hint }) => (
+                      <li key={key}>
+                        <label className="globe-switch">
+                          <span className="globe-switch__text">
+                            <strong>{label}</strong>
+                            <em>{hint}</em>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={layers[key]}
+                            onChange={(e) =>
+                              setLayers((prev) => ({ ...prev, [key]: e.target.checked }))
+                            }
+                          />
+                          <span className="globe-switch__track" aria-hidden>
+                            <span className="globe-switch__thumb" />
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="globe-card globe-card--compact">
+          <h2 className="globe-card__title">
+            <span className="globe-card__index">04</span>姿态控制
+          </h2>
+          <div className="globe-actions">
+            <button
+              type="button"
+              className={`globe-btn${autoRotate ? ' is-primary' : ''}`}
+              onClick={() => setAutoRotate((v) => !v)}
+            >
+              {autoRotate ? '❙❙ 暂停自转' : '▶ 开启自转'}
+            </button>
+            <button type="button" className="globe-btn" onClick={handleReset}>
+              ⌖ 复位视角
+            </button>
+            <button type="button" className="globe-btn" onClick={handleScreenshot}>
+              ⤓ 导出画面
+            </button>
+          </div>
+          <p className="globe-actions__hint">
+            按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情
+          </p>
+          <p className="globe-actions__hint globe-actions__hint--axis">
+            复位后地轴与水平线成 66.5°，向右倾斜
+          </p>
         </section>
       </aside>
 
