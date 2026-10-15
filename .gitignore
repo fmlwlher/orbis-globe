@@ -50,3 +50,8 @@ coverage/
 .codebuddy/
 .genie/
 .cloudstudio
+
+# ── 本地验证截图（调试产物，不入库） ──────────────────
+验证截图-*.png
+/verify-*.png
+/axis_*.png

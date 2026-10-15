@@ -849,20 +849,25 @@ export class GlobeEngine {
     this.gridGroup.add(this.parallelLabelGroup);
 
     // ── 地轴线（穿过南北极并向外延伸）──
+    // 说明：LineBasicMaterial.linewidth 在 Windows / ANGLE 上会被强制为 1px，
+    // 单纯调 linewidth 无法加粗；地轴是沿 Y 轴的直线，用细长圆柱体（实心几何）
+    // 表现粗细最稳妥可靠。
     this.axisGroup = new THREE.Group();
-    const axisMat = new THREE.LineBasicMaterial({
+    const axisMat = new THREE.MeshBasicMaterial({
       color: 0xffd591,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.9,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
     const axisR = EARTH_RADIUS * 1.3;
-    const axisGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, -axisR, 0),
-      new THREE.Vector3(0, axisR, 0),
-    ]);
-    this.axisGroup.add(new THREE.Line(axisGeo, axisMat));
+    // 圆柱半径决定线条视觉粗细（0.012 ≈ 球体半径的 1.2%，屏显约 3px）
+    const axisRod = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, axisR * 2, 12, 1, true),
+      axisMat
+    );
+    axisRod.renderOrder = 3;
+    this.axisGroup.add(axisRod);
     this.gridGroup.add(this.axisGroup);
 
     this.atmosphereMesh.parent?.add(this.gridGroup);

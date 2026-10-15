@@ -774,10 +774,13 @@ function buildMeridianBand(lng, radius, width){
   grid.add(layerG.parallelLabels);
 
   // 地轴线
+  /* 地轴线：LineBasicMaterial.linewidth 在 Windows / ANGLE 上会被强制为 1px，
+     地轴是沿 Y 轴的直线，改用细长圆柱体（实心几何）表现粗细最可靠。 */
   layerG.axis = new THREE.Group();
-  const axisMat = new THREE.LineBasicMaterial({ color:0xffd591, transparent:true, opacity:.55, depthWrite:false, blending:THREE.AdditiveBlending });
-  layerG.axis.add(new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-1.3,0), new THREE.Vector3(0,1.3,0)]), axisMat));
+  const axisMat = new THREE.MeshBasicMaterial({ color:0xffd591, transparent:true, opacity:.9, depthWrite:false, blending:THREE.AdditiveBlending });
+  const axisRod = new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,2.6,12,1,true), axisMat);
+  axisRod.renderOrder = 3;
+  layerG.axis.add(axisRod);
   grid.add(layerG.axis);
 }
 
