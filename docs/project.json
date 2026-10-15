@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Thicken and brighten graticule lines",
+  "version_description": "Fix parallels ribbon degeneration",
   "preview_type": "pc"
 }
