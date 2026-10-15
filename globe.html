@@ -664,15 +664,18 @@ function buildGridRibbon(kind, value, radius, width, mat){
   const start = kind==='meridian' ? -90 : -180;
 
   for (let i=0;i<=rows;i++){
-    const t = start + span*i/rows;              /* 纬度（经线）或经度（纬线） */
-    let w = width;
+    const t = start + span*i/rows;              /* 经线：纬度；纬线：经度 */
+    let a, b;
     if (kind==='meridian'){
-      /* 两极附近带宽趋于 0，设下限避免退化 */
+      /* 沿经度偏移做宽度；两极附近补偿分母避免退化 */
       const cap = Math.max(Math.cos(t*Math.PI/180), .06);
-      w = width/cap;
+      const w = width/cap;
+      a = llToV(t, value-w, radius); b = llToV(t, value+w, radius);
+    } else {
+      /* 沿纬度偏移做宽度（纬线走向东西，宽度必须南北向，
+         沿经度偏移会退化成一个点——这正是此前纬线「消失」的原因） */
+      a = llToV(value-width, t, radius); b = llToV(value+width, t, radius);
     }
-    const a = kind==='meridian' ? llToV(t, value-w, radius) : llToV(value, t-w, radius);
-    const b = kind==='meridian' ? llToV(t, value+w, radius) : llToV(value, t+w, radius);
     positions.push(a.x,a.y,a.z, b.x,b.y,b.z);
     if (i<rows){ const idx=i*2; indices.push(idx,idx+1,idx+2, idx+1,idx+3,idx+2); }
   }

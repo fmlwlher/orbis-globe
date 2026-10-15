@@ -634,12 +634,16 @@ export class GlobeEngine {
    *
    * WebGL 的 LineBasicMaterial.linewidth 在 Windows / ANGLE 上会被强制为 1px，
    * 单纯调 linewidth 无法加粗；因此改用贴地窄带网格来表现线宽。
-   * 带宽以「角度差」表示：经线在赤道最宽、向两极自然收敛（与真实经纬网一致）。
+   *
+   * 宽度必须沿「垂直于走向」的方向偏移：
+   *   - 经线：走向是南北向，宽度沿经度偏移 → 赤道最宽、向两极按 cos(lat) 收敛
+   *   - 纬线：走向是东西向，宽度必须沿**纬度**偏移（沿经度偏移会退化成一个点，
+   *           这才是此前纬线「消失」的原因）
    *
    * @param kind   'meridian' 固定经度 | 'parallel' 固定纬度
    * @param value  经度值或纬度值
    * @param radius 贴附半径
-   * @param width  半宽（单位：度）。0.004° ≈ 赤道处 0.44km，视觉上约 2px
+   * @param width  半宽（单位：度）
    * @param mat    材质
    */
   private buildGridRibbon(
@@ -656,17 +660,22 @@ export class GlobeEngine {
     const start = kind === 'meridian' ? -90 : -180;
 
     for (let i = 0; i <= rows; i++) {
-      const t = start + (span * i) / rows; // 纬度（经线）或经度（纬线）
-      // 经线两极附近、纬线整体都不需要收缩；只有经线需要按 cos(lat) 补偿
-      let w = width;
+      const t = start + (span * i) / rows; // 经线：纬度；纬线：经度
+      let a: { x: number; y: number; z: number };
+      let b: { x: number; y: number; z: number };
+
       if (kind === 'meridian') {
+        // 沿经度偏移做宽度；两极附近补偿分母避免退化
         const cap = Math.max(Math.cos((t * Math.PI) / 180), 0.06);
-        w = width / cap;
+        const w = width / cap;
+        a = latLngToVector3(t, value - w, radius);
+        b = latLngToVector3(t, value + w, radius);
+      } else {
+        // 沿纬度偏移做宽度（纬线走向东西，宽度必须南北向）
+        a = latLngToVector3(value - width, t, radius);
+        b = latLngToVector3(value + width, t, radius);
       }
-      const a =
-        kind === 'meridian' ? latLngToVector3(t, value - w, radius) : latLngToVector3(value, t - w, radius);
-      const b =
-        kind === 'meridian' ? latLngToVector3(t, value + w, radius) : latLngToVector3(value, t + w, radius);
+
       positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
       if (i < rows) {
         const idx = i * 2;
