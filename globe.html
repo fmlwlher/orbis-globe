@@ -241,26 +241,26 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
       <p class="g-hint" id="coordMsg">数字 + 度符号 + 方向字母（N/S 纬度，E/W 经度），如 30°N / 45°W</p>
     </section>
     <section class="g-card">
-      <h2><span class="ix">02</span>观测站检索</h2>
-      <div class="g-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="search" list="placeList" placeholder="城市 / 国家 / 英文名…" autocomplete="off"/>
-        <datalist id="placeList"></datalist>
-      </div>
-      <div class="g-chips" id="chips"></div>
-    </section>
-    <section class="g-card">
-      <h2><span class="ix">03</span>图层开关</h2>
-      <div id="layers"></div>
-    </section>
-    <section class="g-card">
-      <h2><span class="ix">04</span>姿态控制</h2>
+      <h2><span class="ix">02</span>姿态控制</h2>
       <div class="g-actions">
         <button class="g-btn primary" id="btnRotate">❙❙ 暂停自转</button>
         <button class="g-btn" id="btnReset">⌖ 复位视角</button>
         <button class="g-btn" id="btnShot">⤓ 导出画面</button>
       </div>
       <p class="g-hint">按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情</p>
+    </section>
+    <section class="g-card">
+      <h2><span class="ix">03</span>图层开关</h2>
+      <div id="layers"></div>
+    </section>
+    <section class="g-card">
+      <h2><span class="ix">04</span>观测站检索</h2>
+      <div class="g-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" list="placeList" placeholder="城市 / 国家 / 英文名…" autocomplete="off"/>
+        <datalist id="placeList"></datalist>
+      </div>
+      <div class="g-chips" id="chips"></div>
     </section>
   </aside>
 

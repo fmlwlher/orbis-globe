@@ -529,60 +529,28 @@ const Index = () => {
           )}
         </section>
 
-        <section className="globe-card">
+        <section className="globe-card globe-card--compact">
           <h2 className="globe-card__title">
-            <span className="globe-card__index">02</span>观测站检索
+            <span className="globe-card__index">02</span>姿态控制
           </h2>
-          <div className="globe-search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="城市 / 国家 / 英文名…"
-              aria-label="检索观测站"
-            />
+          <div className="globe-actions">
+            <button
+              type="button"
+              className={`globe-btn${autoRotate ? ' is-primary' : ''}`}
+              onClick={() => setAutoRotate((v) => !v)}
+            >
+              {autoRotate ? '❙❙ 暂停自转' : '▶ 开启自转'}
+            </button>
+            <button type="button" className="globe-btn" onClick={handleReset}>
+              ⌖ 复位视角
+            </button>
+            <button type="button" className="globe-btn" onClick={handleScreenshot}>
+              ⤓ 导出画面
+            </button>
           </div>
-
-          {searchResults.length > 0 && (
-            <ul className="globe-search__results">
-              {searchResults.map((p) => (
-                <li key={p.id}>
-                  <button type="button" onClick={() => flyTo(p)}>
-                    <span
-                      className="globe-dot"
-                      style={{ background: CATEGORY_META[p.category].color }}
-                    />
-                    <span className="globe-search__name">{p.name}</span>
-                    <span className="globe-search__country">{p.country}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="globe-chips">
-            {CATEGORY_ORDER.map((cat) => {
-              const meta = CATEGORY_META[cat];
-              const active = activeCategories.includes(cat);
-              const count = PLACES.filter((p) => p.category === cat).length;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  className={`globe-chip${active ? ' is-active' : ''}`}
-                  style={{ '--chip': meta.color } as React.CSSProperties}
-                  onClick={() => toggleCategory(cat)}
-                >
-                  <span className="globe-chip__glyph">{meta.glyph}</span>
-                  {meta.label}
-                  <span className="globe-chip__count">{count}</span>
-                </button>
-              );
-            })}
-          </div>
+          <p className="globe-actions__hint">
+            按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情
+          </p>
         </section>
 
         <section className="globe-card">
@@ -638,28 +606,60 @@ const Index = () => {
           </div>
         </section>
 
-        <section className="globe-card globe-card--compact">
+        <section className="globe-card">
           <h2 className="globe-card__title">
-            <span className="globe-card__index">04</span>姿态控制
+            <span className="globe-card__index">04</span>观测站检索
           </h2>
-          <div className="globe-actions">
-            <button
-              type="button"
-              className={`globe-btn${autoRotate ? ' is-primary' : ''}`}
-              onClick={() => setAutoRotate((v) => !v)}
-            >
-              {autoRotate ? '❙❙ 暂停自转' : '▶ 开启自转'}
-            </button>
-            <button type="button" className="globe-btn" onClick={handleReset}>
-              ⌖ 复位视角
-            </button>
-            <button type="button" className="globe-btn" onClick={handleScreenshot}>
-              ⤓ 导出画面
-            </button>
+          <div className="globe-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="城市 / 国家 / 英文名…"
+              aria-label="检索观测站"
+            />
           </div>
-          <p className="globe-actions__hint">
-            按住拖动旋转 · 滚轮 / 双指捏合缩放 · 单击标记查看详情
-          </p>
+
+          {searchResults.length > 0 && (
+            <ul className="globe-search__results">
+              {searchResults.map((p) => (
+                <li key={p.id}>
+                  <button type="button" onClick={() => flyTo(p)}>
+                    <span
+                      className="globe-dot"
+                      style={{ background: CATEGORY_META[p.category].color }}
+                    />
+                    <span className="globe-search__name">{p.name}</span>
+                    <span className="globe-search__country">{p.country}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="globe-chips">
+            {CATEGORY_ORDER.map((cat) => {
+              const meta = CATEGORY_META[cat];
+              const active = activeCategories.includes(cat);
+              const count = PLACES.filter((p) => p.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`globe-chip${active ? ' is-active' : ''}`}
+                  style={{ '--chip': meta.color } as React.CSSProperties}
+                  onClick={() => toggleCategory(cat)}
+                >
+                  <span className="globe-chip__glyph">{meta.glyph}</span>
+                  {meta.label}
+                  <span className="globe-chip__count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
         </section>
       </aside>
 
