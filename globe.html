@@ -641,57 +641,91 @@ const makeLabel = (text, v) => {
 
 /* 东西半球分界线（20°W / 160°E）的共享材质 */
 let hemisphereDividerMat;
+/* 普通经纬线 / 回归线极圈的贴地窄带材质（用 Mesh 才能可靠加粗） */
+let gridLineMat, specialRibbonMat;
 
 /**
- * 生成一条「有宽度」的经线带，用于东西半球分界线。
+ * 生成一条「有宽度」的贴地环带（经线或纬线）。
  *
  * WebGL 的 LineBasicMaterial.linewidth 在 Windows / ANGLE 上会被强制为 1px，
- * 做不出"比普通经线更粗"的效果；因此改用贴地窄带网格来表现粗细。
- * 带宽以"经度差"表示，赤道最宽、向两极自然收敛（与真实经纬网一致）。
+ * 单纯调 linewidth 无法加粗；因此改用贴地窄带网格来表现线宽。
+ * 带宽以「角度差」表示：经线在赤道最宽、向两极自然收敛（与真实经纬网一致）。
+ *
+ * @param kind   'meridian' 固定经度 | 'parallel' 固定纬度
+ * @param value  经度值或纬度值
+ * @param radius 贴附半径
+ * @param width  半宽（单位：度）
+ * @param mat    材质
+ */
+function buildGridRibbon(kind, value, radius, width, mat){
+  const positions=[], indices=[];
+  const rows = kind==='meridian' ? 120 : 180;
+  const span = kind==='meridian' ? 180 : 360;   /* 经线半圈，纬线整圈 */
+  const start = kind==='meridian' ? -90 : -180;
+
+  for (let i=0;i<=rows;i++){
+    const t = start + span*i/rows;              /* 纬度（经线）或经度（纬线） */
+    let w = width;
+    if (kind==='meridian'){
+      /* 两极附近带宽趋于 0，设下限避免退化 */
+      const cap = Math.max(Math.cos(t*Math.PI/180), .06);
+      w = width/cap;
+    }
+    const a = kind==='meridian' ? llToV(t, value-w, radius) : llToV(value, t-w, radius);
+    const b = kind==='meridian' ? llToV(t, value+w, radius) : llToV(value, t+w, radius);
+    positions.push(a.x,a.y,a.z, b.x,b.y,b.z);
+    if (i<rows){ const idx=i*2; indices.push(idx,idx+1,idx+2, idx+1,idx+3,idx+2); }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+  geo.setIndex(indices);
+  const mesh=new THREE.Mesh(geo, mat);
+  mesh.renderOrder=2;
+  return mesh;
+}
+
+/**
+ * 生成一条「有宽度」的经线带，用于东西半球分界线（内部委托给 buildGridRibbon）。
  *
  * @param lng    经线经度
  * @param radius 贴附半径
  * @param width  经方向半宽（单位：度）
  */
 function buildMeridianBand(lng, radius, width){
-  const positions=[], indices=[], rows=90;
-  for (let i=0;i<=rows;i++){
-    const lat=-90+180*i/rows;
-    // 两极附近带宽趋于 0，设下限避免退化
-    const cap=Math.max(Math.cos(lat*Math.PI/180), .06);
-    const w=width/cap;
-    const l=llToV(lat, lng-w, radius), rr=llToV(lat, lng+w, radius);
-    positions.push(l.x,l.y,l.z, rr.x,rr.y,rr.z);
-    if (i<rows){ const a=i*2; indices.push(a,a+1,a+2, a+1,a+3,a+2); }
-  }
-  const geo=new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
-  geo.setIndex(indices);
-  const mesh=new THREE.Mesh(geo, hemisphereDividerMat);
-  mesh.renderOrder=3;
-  return mesh;
+  return buildGridRibbon('meridian', lng, radius, width, hemisphereDividerMat);
 }
 
 {
-  const mat = new THREE.LineBasicMaterial({ color:0x4de3ff, transparent:true, opacity:.16, depthWrite:false, blending:THREE.AdditiveBlending });
-  const acc = new THREE.LineBasicMaterial({ color:0xffc861, transparent:true, opacity:.38, depthWrite:false, blending:THREE.AdditiveBlending });
-  const special = new THREE.LineDashedMaterial({ color:0xffb347, transparent:true, opacity:.6, dashSize:.052, gapSize:.036, depthWrite:false, blending:THREE.AdditiveBlending });
+  /* 普通经纬线：改用贴地窄带网格（Mesh）绘制，才能真正「加粗」。
+     颜色加深 + 提高不透明度，保证在卫星影像上清晰可辨。 */
+  gridLineMat = new THREE.MeshBasicMaterial({ color:0x6feeff, transparent:true, opacity:.85,
+    depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
+  /* 赤道 / 本初子午线：琥珀色，比普通经纬线更亮 */
+  const acc = new THREE.MeshBasicMaterial({ color:0xffd47a, transparent:true, opacity:.95,
+    depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
+  /* 回归线 / 极圈：琥珀色虚线（保留虚线样式以作区分），提亮 */
+  const special = new THREE.LineDashedMaterial({ color:0xffb347, transparent:true, opacity:.92, dashSize:.052, gapSize:.036, depthWrite:false, blending:THREE.AdditiveBlending });
+  /* 回归线/极圈额外叠一条贴地窄带，保证「粗」的观感 */
+  specialRibbonMat = new THREE.MeshBasicMaterial({ color:0xffb347, transparent:true, opacity:.8,
+    depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
   /* 东西半球分界线的材质：亮青色实心窄带 */
   hemisphereDividerMat = new THREE.MeshBasicMaterial({ color:0x7ef0ff, transparent:true,
-    opacity:.7, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
+    opacity:.85, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide });
   const r = 1.002;
+  const W_MER = .12;     /* 经线半宽（度），≈ 赤道处 13km，屏显约 2px */
+  const W_PAR = .11;     /* 纬线半宽（度） */
 
   // 经线
   layerG.meridians = new THREE.Group();
   for (let lng=-180; lng<180; lng+=15){
-    layerG.meridians.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts('meridian',lng,r,2)), lng===0?acc:mat));
+    layerG.meridians.add(buildGridRibbon('meridian', lng, r, W_MER, lng===0?acc:gridLineMat));
   }
   /* ── 东西半球分界线：20°W 与 160°E ──
      国际通用的东西半球划分基准（20°W 向东至 160°E 为东半球）。
      比普通经线更粗更亮——WebGL 的 linewidth 在多数平台被忽略，
      故改用球面窄带 Mesh 表现粗细。 */
-  layerG.meridians.add(buildMeridianBand(-20, r*1.003, .0065));
-  layerG.meridians.add(buildMeridianBand(160, r*1.003, .0065));
+  layerG.meridians.add(buildMeridianBand(-20, r*1.003, .16));
+  layerG.meridians.add(buildMeridianBand(160, r*1.003, .16));
   grid.add(layerG.meridians);
 
   // 经度数值（每条经线都标，步长 15°；另补东西半球分界线 20°W / 160°E）
@@ -711,12 +745,13 @@ function buildMeridianBand(lng, radius, width){
   // 纬线 + 回归线/极圈虚线
   layerG.parallels = new THREE.Group();
   for (let lat=-75; lat<=75; lat+=15){
-    layerG.parallels.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts('parallel',lat,r,2)), lat===0?acc:mat));
+    layerG.parallels.add(buildGridRibbon('parallel', lat, r, W_PAR, lat===0?acc:gridLineMat));
   }
   for (const lat of [23.5,-23.5,66.5,-66.5]) {
     const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts('parallel',lat,r,2)), special);
     ln.computeLineDistances();
     layerG.parallels.add(ln);
+    layerG.parallels.add(buildGridRibbon('parallel', lat, r*1.0015, W_PAR*.9, specialRibbonMat));
   }
   grid.add(layerG.parallels);
 

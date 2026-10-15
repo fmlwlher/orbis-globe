@@ -169,6 +169,10 @@ export class GlobeEngine {
   private regionSprites: THREE.Sprite[] = [];
   /** 东西半球分界线（20°W / 160°E）的共享材质 */
   private hemisphereDividerMat!: THREE.MeshBasicMaterial;
+  /** 普通经纬线的贴地窄带材质（用 Mesh 才能可靠加粗） */
+  private gridLineMat!: THREE.MeshBasicMaterial;
+  /** 回归线 / 极圈的贴地窄带材质（叠加在虚线之上） */
+  private specialRibbonMat!: THREE.MeshBasicMaterial;
   private markerGroup!: THREE.Group;
   private arcGroup!: THREE.Group;
   private starField!: THREE.Points;
@@ -626,34 +630,47 @@ export class GlobeEngine {
   }
 
   /**
-   * 生成一条「有宽度」的经线带（用于东西半球分界线）。
+   * 生成一条「有宽度」的贴地环带（经线或纬线）。
    *
    * WebGL 的 LineBasicMaterial.linewidth 在 Windows / ANGLE 上会被强制为 1px，
-   * 无法做出"比普通经线更粗"的效果；因此改用贴地窄带网格来表现粗细。
-   * 带宽以"经度差"表示，在赤道最宽、向两极自然收敛（与真实经纬网一致）。
+   * 单纯调 linewidth 无法加粗；因此改用贴地窄带网格来表现线宽。
+   * 带宽以「角度差」表示：经线在赤道最宽、向两极自然收敛（与真实经纬网一致）。
    *
-   * @param lng    经线经度
+   * @param kind   'meridian' 固定经度 | 'parallel' 固定纬度
+   * @param value  经度值或纬度值
    * @param radius 贴附半径
-   * @param width  经方向半宽（单位：度）。0.0065° ≈ 赤道处 0.72km，视觉上约 3-4px
+   * @param width  半宽（单位：度）。0.004° ≈ 赤道处 0.44km，视觉上约 2px
+   * @param mat    材质
    */
-  private buildMeridianBand(lng: number, radius: number, width: number) {
+  private buildGridRibbon(
+    kind: 'meridian' | 'parallel',
+    value: number,
+    radius: number,
+    width: number,
+    mat: THREE.Material
+  ) {
     const positions: number[] = [];
     const indices: number[] = [];
-    const rows = 90;
+    const rows = kind === 'meridian' ? 120 : 180;
+    const span = kind === 'meridian' ? 180 : 360; // 经线半圈，纬线整圈
+    const start = kind === 'meridian' ? -90 : -180;
 
     for (let i = 0; i <= rows; i++) {
-      const lat = -90 + (180 * i) / rows;
-      // 两极附近的带宽会趋于 0，做一个下限避免退化
-      const cap = Math.max(Math.cos((lat * Math.PI) / 180), 0.06);
-      const w = width / cap;
-
-      const left = latLngToVector3(lat, lng - w, radius);
-      const right = latLngToVector3(lat, lng + w, radius);
-      positions.push(left.x, left.y, left.z, right.x, right.y, right.z);
-
+      const t = start + (span * i) / rows; // 纬度（经线）或经度（纬线）
+      // 经线两极附近、纬线整体都不需要收缩；只有经线需要按 cos(lat) 补偿
+      let w = width;
+      if (kind === 'meridian') {
+        const cap = Math.max(Math.cos((t * Math.PI) / 180), 0.06);
+        w = width / cap;
+      }
+      const a =
+        kind === 'meridian' ? latLngToVector3(t, value - w, radius) : latLngToVector3(value, t - w, radius);
+      const b =
+        kind === 'meridian' ? latLngToVector3(t, value + w, radius) : latLngToVector3(value, t + w, radius);
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
       if (i < rows) {
-        const a = i * 2;
-        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        const idx = i * 2;
+        indices.push(idx, idx + 1, idx + 2, idx + 1, idx + 3, idx + 2);
       }
     }
 
@@ -661,9 +678,18 @@ export class GlobeEngine {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setIndex(indices);
 
-    const mesh = new THREE.Mesh(geo, this.hemisphereDividerMat);
-    mesh.renderOrder = 3;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = 2;
     return mesh;
+  }
+
+  /**
+   * 生成一条「有宽度」的经线带（用于东西半球分界线）。
+   *
+   * 保留此方法以兼容既有调用；内部委托给通用的 buildGridRibbon。
+   */
+  private buildMeridianBand(lng: number, radius: number, width: number) {
+    return this.buildGridRibbon('meridian', lng, radius, width, this.hemisphereDividerMat);
   }
 
   private buildGrid() {
@@ -671,49 +697,64 @@ export class GlobeEngine {
     this.gridGroup = new THREE.Group();
     this.gridGroup.renderOrder = 2;
 
-    const mat = new THREE.LineBasicMaterial({
-      color: 0x4de3ff,
+    // 普通经纬线：改用贴地窄带网格（Mesh）绘制，才能真正「加粗」。
+    // 颜色加深 + 提高不透明度，保证在卫星影像上清晰可辨。
+    this.gridLineMat = new THREE.MeshBasicMaterial({
+      color: 0x6feeff,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.85,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
     });
-    const accent = new THREE.LineBasicMaterial({
-      color: 0xffc861,
+    // 赤道 / 本初子午线：琥珀色，比普通经纬线更亮
+    const accent = new THREE.MeshBasicMaterial({
+      color: 0xffd47a,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.95,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
     });
-    // 回归线 / 极圈：琥珀色虚线，区别于普通纬线
+    // 回归线 / 极圈：琥珀色虚线（保持 Line 虚线样式以作区分），加粗通道 + 提亮
     const specialMat = new THREE.LineDashedMaterial({
       color: 0xffb347,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.92,
       dashSize: 0.052,
       gapSize: 0.036,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+    });
+    // 回归线/极圈额外叠一条贴地窄带，保证「粗」的观感
+    this.specialRibbonMat = new THREE.MeshBasicMaterial({
+      color: 0xffb347,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
     });
 
     // 东西半球分界线的材质：亮青色实心窄带
     this.hemisphereDividerMat = new THREE.MeshBasicMaterial({
       color: 0x7ef0ff,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.85,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
 
     const r = EARTH_RADIUS * 1.002;
+    const W_MER = 0.12; // 经线半宽（度），≈ 赤道处 13km，屏显约 2px
+    const W_PAR = 0.11; // 纬线半宽（度）
 
     // ── 经线（360° 全经圈）──
     this.meridianGroup = new THREE.Group();
     for (let lng = -180; lng < 180; lng += 15) {
-      const pts = this.buildCirclePoints('meridian', lng, r);
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      this.meridianGroup.add(new THREE.Line(geo, lng === 0 ? accent : mat));
+      const m = this.buildGridRibbon('meridian', lng, r, W_MER, lng === 0 ? accent : this.gridLineMat);
+      this.meridianGroup.add(m);
     }
 
     // ── 东西半球分界线：20°W 与 160°E ──
@@ -722,7 +763,7 @@ export class GlobeEngine {
     // 线粗通过在球面上生成一段"细窄带网格"实现——WebGL 的 linewidth 在多数平台
     // （含 Chrome/ANGLE）会被忽略，只有 Mesh 带宽才能可靠地呈现粗细。
     for (const lng of [-20, 160]) {
-      this.meridianGroup.add(this.buildMeridianBand(lng, r * 1.003, 0.0065));
+      this.meridianGroup.add(this.buildMeridianBand(lng, r * 1.003, 0.16));
     }
     this.gridGroup.add(this.meridianGroup);
 
@@ -747,17 +788,25 @@ export class GlobeEngine {
     // ── 纬线（含赤道）──
     this.parallelGroup = new THREE.Group();
     for (let lat = -75; lat <= 75; lat += 15) {
-      const pts = this.buildCirclePoints('parallel', lat, r);
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      this.parallelGroup.add(new THREE.Line(geo, lat === 0 ? accent : mat));
+      const m = this.buildGridRibbon(
+        'parallel',
+        lat,
+        r,
+        W_PAR,
+        lat === 0 ? accent : this.gridLineMat
+      );
+      this.parallelGroup.add(m);
     }
-    // ── 回归线（±23.5°）与极圈（±66.5°）：虚线 ──
+    // ── 回归线（±23.5°）与极圈（±66.5°）：虚线 + 贴地窄带叠加 ──
     for (const lat of [23.5, -23.5, 66.5, -66.5]) {
       const pts = this.buildCirclePoints('parallel', lat, r);
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       const line = new THREE.Line(geo, specialMat);
       line.computeLineDistances(); // 虚线必需
       this.parallelGroup.add(line);
+      this.parallelGroup.add(
+        this.buildGridRibbon('parallel', lat, r * 1.0015, W_PAR * 0.9, this.specialRibbonMat)
+      );
     }
     this.gridGroup.add(this.parallelGroup);
 
