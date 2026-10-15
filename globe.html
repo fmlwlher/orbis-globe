@@ -50,10 +50,12 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden}
 .g-clock .row.muted .lb{color:var(--g-text-faint)}
 .g-clock .row.muted .vl{font-size:12px;color:var(--g-text-dim)}
 .g-panel{position:absolute;top:92px;z-index:10;width:252px;display:flex;flex-direction:column;gap:11px;
-  max-height:calc(100vh - 150px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(120,190,235,.28) transparent;pointer-events:none}
+  max-height:calc(100vh - 150px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(120,190,235,.28) transparent;pointer-events:auto;cursor:default}
 .g-panel>*{pointer-events:auto}
 .g-panel::-webkit-scrollbar{width:5px}
 .g-panel::-webkit-scrollbar-thumb{background:rgba(120,190,235,.24);border-radius:3px}
+.g-panel::-webkit-scrollbar-thumb,.g-panel::-webkit-scrollbar-track{cursor:default}
+.g-panel::-webkit-scrollbar-thumb:active{background:rgba(120,190,235,.42)}
 .g-panel.left{left:24px}
 .g-panel.right{right:24px}
 .g-card{position:relative;padding:14px 15px;border:1px solid var(--g-line);border-radius:3px;background:var(--g-panel);
@@ -954,7 +956,16 @@ function hover(cx,cy){
 }
 
 const el = renderer.domElement;
+/* 指针是否落在覆盖画布的 HUD（顶栏 / 侧栏面板含竖滚动条 / 底栏 / 提示框）上。
+   侧栏滚动条位于面板自身的 gutter 内，需在此放行，否则会被当成地球操作。 */
+const onOverlay = (x,y) => {
+  const top = document.elementFromPoint(x,y);
+  if(!top) return false;
+  if(top===el || el.contains(top)) return false;
+  return !!top.closest('.g-panel,.g-header,.g-footer,.g-tip');
+};
 el.addEventListener('pointerdown', e=>{
+  if(onOverlay(e.clientX,e.clientY)) return;
   el.setPointerCapture?.(e.pointerId);
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   dragging=true; moved=false; vel.lat=vel.lng=0;
@@ -995,7 +1006,11 @@ function endPtr(e){
 el.addEventListener('pointerup', endPtr);
 el.addEventListener('pointercancel', endPtr);
 el.addEventListener('pointerleave', ()=>{ if(!dragging){hovered=null;$('tip').classList.remove('on');} });
-el.addEventListener('wheel', e=>{ e.preventDefault(); tDist=clamp(tDist*Math.exp(e.deltaY*.0012),MIN_D,MAX_D); focusHold=false; }, {passive:false});
+el.addEventListener('wheel', e=>{
+  /* 指针在侧栏（含其竖滚动条）上时，滚轮归侧栏滚动，不缩放地球 */
+  if(onOverlay(e.clientX,e.clientY)) return;
+  e.preventDefault(); tDist=clamp(tDist*Math.exp(e.deltaY*.0012),MIN_D,MAX_D); focusHold=false;
+}, {passive:false});
 addEventListener('resize', ()=>{
   const w=container.clientWidth||innerWidth, h=container.clientHeight||innerHeight;
   camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h,false);

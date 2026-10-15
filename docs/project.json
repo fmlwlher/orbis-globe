@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Set tropics to 23.5 degrees, label polar circles",
+  "version_description": "Move coordinate locator card to first position",
   "preview_type": "pc"
 }

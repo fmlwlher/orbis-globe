@@ -221,7 +221,12 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(120, 190, 235, 0.28) transparent;
-  pointer-events: none;
+  /* 面板本身必须可命中：否则竖滚动条所在的那条 gutter 会「穿透」到底层
+     画布上，指针落在滚动条上时既显示抓取光标、按下又会拖动地球。
+     面板内的卡片之间有 gap，但 gap 处也只是不响应点击，不影响观感。 */
+  pointer-events: auto;
+  /* 滚动条 / 空白区域用普通箭头光标，不要继承画布的 grab */
+  cursor: default;
 }
 .globe-panel > * {
   pointer-events: auto;
@@ -232,6 +237,14 @@
 .globe-panel::-webkit-scrollbar-thumb {
   background: rgba(120, 190, 235, 0.24);
   border-radius: 3px;
+}
+/* 滚动条区域：普通箭头光标，可按住上下拖拽滚动 */
+.globe-panel::-webkit-scrollbar-thumb,
+.globe-panel::-webkit-scrollbar-track {
+  cursor: default;
+}
+.globe-panel::-webkit-scrollbar-thumb:active {
+  background: rgba(120, 190, 235, 0.42);
 }
 .globe-panel--left {
   left: 26px;

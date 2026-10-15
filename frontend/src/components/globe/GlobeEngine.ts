@@ -1155,6 +1155,8 @@ export class GlobeEngine {
   };
 
   private onPointerDown = (e: PointerEvent) => {
+    // 指针若落在侧栏等 HUD 上（例如图层面板的竖滚动条），不拖拽地球
+    if (this.isOnOverlay(e.clientX, e.clientY)) return;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.activePointerId = e.pointerId;
@@ -1246,7 +1248,25 @@ export class GlobeEngine {
     }
   };
 
+  /**
+   * 判断某个屏幕坐标是否落在覆盖在画布之上的 HUD（顶栏 / 侧栏面板 / 底栏 / 悬浮提示）上。
+   * 侧栏的竖滚动条位于面板元素的 gutter 内，属于面板本身而不属于画布，
+   * 需要在这里放行，否则滚动条上的按下 / 滚轮会被当成地球操作。
+   */
+  private isOnOverlay(clientX: number, clientY: number): boolean {
+    if (typeof document === 'undefined') return false;
+    // 画布在 z-index 1，HUD 在 10 及以上 —— 取该点最顶层的元素判断
+    const top = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    if (!top) return false;
+    const canvas = this.renderer.domElement;
+    if (top === canvas || canvas.contains(top)) return false;
+    // 命中任意 HUD 容器（面板、卡片、滚动条、顶栏、底栏、提示框）都不拖拽地球
+    return !!top.closest('.globe-panel, .globe-header, .globe-footer, .globe-tooltip');
+  }
+
   private onWheel = (e: WheelEvent) => {
+    // 指针在侧栏（含其滚动条）上时，滚轮归侧栏滚动，不缩放地球
+    if (this.isOnOverlay(e.clientX, e.clientY)) return;
     e.preventDefault();
     const factor = Math.exp(e.deltaY * 0.0012);
     this.setDistance(this.targetDistance * factor);
