@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Thicken earth axis line with cylinder mesh",
+  "version_description": "Add country borders layer (Natural Earth 110m)",
   "preview_type": "pc"
 }

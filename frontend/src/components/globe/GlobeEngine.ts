@@ -20,6 +20,7 @@ import {
   type Place,
 } from './places';
 import { REGIONS, REGION_STYLE, type Region } from './regions';
+import { COUNTRY_BORDER_LINES } from './countryBorders';
 
 export interface GlobeState {
   lat: number;
@@ -45,6 +46,7 @@ export type LayerKey =
   | 'parallels'
   | 'parallelLabels'
   | 'axis'
+  | 'countryBorders'
   | 'regions'
   | 'markers'
   | 'arcs'
@@ -62,6 +64,8 @@ export interface LayerVisibility {
   parallels: boolean;
   parallelLabels: boolean;
   axis: boolean;
+  /** 国家 / 地区陆地边界线（默认关闭） */
+  countryBorders: boolean;
   /** 大洲 / 大洋名称标注 */
   regions: boolean;
   markers: boolean;
@@ -165,6 +169,8 @@ export class GlobeEngine {
   private parallelGroup!: THREE.Group;
   private parallelLabelGroup!: THREE.Group;
   private axisGroup!: THREE.Group;
+  /** 国家 / 地区陆地边界线 */
+  private borderGroup!: THREE.Group;
   private regionGroup!: THREE.Group;
   private regionSprites: THREE.Sprite[] = [];
   /** 东西半球分界线（20°W / 160°E）的共享材质 */
@@ -239,6 +245,8 @@ export class GlobeEngine {
     parallels: true,
     parallelLabels: true,
     axis: true,
+    // 国家分界线：默认关闭，由用户按需开启
+    countryBorders: false,
     regions: true,
     markers: true,
     arcs: true,
@@ -301,6 +309,7 @@ export class GlobeEngine {
     this.buildStars();
     this.buildEarth();
     this.buildGrid();
+    this.buildCountryBorders();
     this.buildRegions();
     this.buildMarkers();
     this.buildArcs();
@@ -873,6 +882,44 @@ export class GlobeEngine {
     this.atmosphereMesh.parent?.add(this.gridGroup);
 
     this.buildCoordPoint();
+  }
+
+  /**
+   * 构建国家 / 地区陆地边界线。
+   *
+   * 数据来自 Natural Earth 110m（见 countryBorders.ts）。为了让线条在
+   * 球面上足够清晰且不被地表贴图「吃」掉，这里采用与经纬线相同的思路：
+   * 每条折线用 `THREE.Line` 绘制，并沿球面法线略微抬高半径（1.0015）以
+   * 规避 z-fighting。线宽受 ANGLE 限制无法靠 linewidth 加粗，因此这里用
+   * 「细线 + 叠加发光」的观感策略：淡金色、半透明、加法混合——
+   * 在卫星影像上呈现为细而亮的国界，不喧宾夺主。
+   */
+  private buildCountryBorders() {
+    this.borderGroup = new THREE.Group();
+    this.borderGroup.renderOrder = 2;
+    // 贴在球面外一点点，避免与地表 z-fighting；低于经纬线的 1.002
+    const r = EARTH_RADIUS * 1.0015;
+
+    const borderMat = new THREE.LineBasicMaterial({
+      color: 0xffe2a8,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    for (const line of COUNTRY_BORDER_LINES) {
+      if (line.length < 2) continue;
+      const pts = line.map(([lng, lat]) => {
+        const v = latLngToVector3(lat, lng, r);
+        return new THREE.Vector3(v.x, v.y, v.z);
+      });
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      this.borderGroup.add(new THREE.Line(geo, borderMat));
+    }
+
+    // 与经纬线同处一个「贴地覆盖层」，跟随地球一起旋转
+    this.atmosphereMesh.parent?.add(this.borderGroup);
   }
 
   /** 生成一个文字标签精灵（用于经纬度数值） */
@@ -1449,6 +1496,9 @@ export class GlobeEngine {
         break;
       case 'axis':
         this.axisGroup.visible = visible;
+        break;
+      case 'countryBorders':
+        this.borderGroup.visible = visible;
         break;
       case 'regions':
         this.regionGroup.visible = visible;

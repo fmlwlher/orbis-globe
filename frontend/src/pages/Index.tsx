@@ -74,9 +74,10 @@ const LAYER_GROUPS: {
   {
     id: 'surface',
     title: '地表与分区',
-    hint: '影像 / 纬度带 / 半球',
+    hint: '影像 / 国界 / 纬度带 / 半球',
     items: [
       { key: 'satellite', label: '卫星影像', hint: '真实地表贴图与夜灯' },
+      { key: 'countryBorders', label: '国家分界', hint: '陆地国界与地区界线（默认关）' },
       { key: 'zoneTint', label: '纬度分带', hint: '低/中/高纬度分色（默认关）' },
       { key: 'hemisphereTint', label: '南北半球', hint: '南北半球分色（默认关）' },
       { key: 'ewTint', label: '东西半球', hint: '东西半球分色（默认关）' },
@@ -111,6 +112,7 @@ const Index = () => {
     parallels: false,
     parallelLabels: false,
     axis: true,
+    countryBorders: false,
     regions: true,
     markers: true,
     arcs: false,
