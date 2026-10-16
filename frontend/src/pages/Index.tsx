@@ -74,10 +74,11 @@ const LAYER_GROUPS: {
   {
     id: 'surface',
     title: '地表与分区',
-    hint: '影像 / 国界 / 纬度带 / 半球',
+    hint: '影像 / 国界 / 省界 / 纬度带 / 半球',
     items: [
       { key: 'satellite', label: '卫星影像', hint: '真实地表贴图与夜灯' },
       { key: 'countryBorders', label: '国家分界', hint: '陆地国界与地区界线（默认关）' },
+      { key: 'chinaProvinces', label: '中国省界', hint: '省级行政区界线（默认关）' },
       { key: 'zoneTint', label: '纬度分带', hint: '低/中/高纬度分色（默认关）' },
       { key: 'hemisphereTint', label: '南北半球', hint: '南北半球分色（默认关）' },
       { key: 'ewTint', label: '东西半球', hint: '东西半球分色（默认关）' },
@@ -113,6 +114,7 @@ const Index = () => {
     parallelLabels: false,
     axis: true,
     countryBorders: false,
+    chinaProvinces: false,
     regions: true,
     markers: true,
     arcs: false,
@@ -254,6 +256,7 @@ const Index = () => {
     engineRef.current?.setLayerVisible('parallelLabels', layers.parallelLabels);
     engineRef.current?.setLayerVisible('axis', layers.axis);
     engineRef.current?.setLayerVisible('countryBorders', layers.countryBorders);
+    engineRef.current?.setLayerVisible('chinaProvinces', layers.chinaProvinces);
     engineRef.current?.setLayerVisible('regions', layers.regions);
     engineRef.current?.setLayerVisible('markers', layers.markers);
     engineRef.current?.setLayerVisible('arcs', layers.arcs);

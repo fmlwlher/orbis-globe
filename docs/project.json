@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Fix country borders toggle not syncing in React UI",
+  "version_description": "Add China provinces boundary layer (default off)",
   "preview_type": "pc"
 }
