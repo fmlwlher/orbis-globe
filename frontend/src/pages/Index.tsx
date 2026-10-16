@@ -253,6 +253,7 @@ const Index = () => {
     engineRef.current?.setLayerVisible('parallels', layers.parallels);
     engineRef.current?.setLayerVisible('parallelLabels', layers.parallelLabels);
     engineRef.current?.setLayerVisible('axis', layers.axis);
+    engineRef.current?.setLayerVisible('countryBorders', layers.countryBorders);
     engineRef.current?.setLayerVisible('regions', layers.regions);
     engineRef.current?.setLayerVisible('markers', layers.markers);
     engineRef.current?.setLayerVisible('arcs', layers.arcs);

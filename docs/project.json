@@ -3,6 +3,6 @@
   "sub_project_type": "",
   "name": "ORBIS Globe",
   "app_slug": "orbis-globe",
-  "version_description": "Add country borders layer (Natural Earth 110m)",
+  "version_description": "Fix country borders toggle not syncing in React UI",
   "preview_type": "pc"
 }
