@@ -6,6 +6,7 @@ import { env } from './config/env'
 import { errorHandler } from './middleware/errorHandler'
 import { httpLogger } from './middleware/logger'
 import { systemRouter } from './modules/system'
+import { presenceRouter } from './modules/presence'
 // ============================================
 // Add your domain module imports here
 // ============================================
@@ -32,6 +33,9 @@ export const createApp = (): Application => {
 
   // API routes - System & Health
   app.use(env.API_PREFIX, systemRouter)
+
+  // API routes - 实时在线用户统计
+  app.use(`${env.API_PREFIX}/presence`, presenceRouter)
 
   // ============================================
   // Add your domain module routes here

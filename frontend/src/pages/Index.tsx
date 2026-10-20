@@ -23,6 +23,8 @@ import {
   parseLongitude,
   toCoordInput,
 } from '@/components/globe/geo';
+import { PresenceBadge } from '@/components/globe/PresenceBadge';
+import { usePresence } from '@/hooks/usePresence';
 import './globe.css';
 
 /** localStorage 键：记住上次定位的坐标，刷新页面后仍保留 */
@@ -151,6 +153,18 @@ const Index = () => {
   });
   const [clockText, setClockText] = useState('--:--:--');
   const [utcText, setUtcText] = useState('--:--:--');
+
+  // ── 在线统计：把当前观测焦点同步给统计服务 ──────────────
+  const { reportFocus } = usePresence();
+
+  // 选中观测站即上报「正在看哪里」，供在线列表明细展示
+  useEffect(() => {
+    if (selected) {
+      reportFocus(selected.name, { lat: selected.lat, lng: selected.lng });
+    } else {
+      reportFocus(undefined);
+    }
+  }, [selected, reportFocus]);
 
   // ── 引擎初始化 ──────────────────────────────────────────
   // WebGL 支持性在渲染期探测一次即可，结果恒定，无需响应式重算
@@ -448,14 +462,17 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="globe-clock">
-            <div className="globe-clock__row">
-              <span className="globe-clock__label">CST 北京时间</span>
-              <span className="globe-clock__value">{clockText}</span>
-            </div>
-            <div className="globe-clock__row globe-clock__row--muted">
-              <span className="globe-clock__label">UTC 协调世界时</span>
-              <span className="globe-clock__value">{utcText}</span>
+          <div className="globe-header__right">
+            <PresenceBadge />
+            <div className="globe-clock">
+              <div className="globe-clock__row">
+                <span className="globe-clock__label">CST 北京时间</span>
+                <span className="globe-clock__value">{clockText}</span>
+              </div>
+              <div className="globe-clock__row globe-clock__row--muted">
+                <span className="globe-clock__label">UTC 协调世界时</span>
+                <span className="globe-clock__value">{utcText}</span>
+              </div>
             </div>
           </div>
         </header>
