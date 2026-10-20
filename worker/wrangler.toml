@@ -1,0 +1,22 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "orbis-presence-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+
+# Durable Object 负责聚合在线状态（全局唯一实例）
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceRoom"
+
+# 首次部署必须声明迁移；SQLite 后端是免费版要求
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PresenceRoom"]
+
+[observability]
+enabled = true
+
+# 静态托管场景下前端在 GitHub Pages，跨域请求由代码内 CORS 头放通
+# 无需额外变量；如需限制来源，可改用下面这行并在代码中读取 env
+# [vars]
+# CORS_ORIGIN = "https://fmlwlher.github.io"

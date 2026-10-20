@@ -55,3 +55,6 @@ coverage/
 验证截图-*.png
 /verify-*.png
 /axis_*.png
+
+# Cloudflare wrangler 本地状态
+worker/.wrangler/

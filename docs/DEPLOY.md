@@ -5,10 +5,15 @@
 | 部分 | 内容 | 部署位置 | 是否必需 |
 | --- | --- | --- | --- |
 | 前端 | React + Three.js 三维地球仪 | **GitHub Pages**（静态托管） | 必需 |
-| 后端 | 在线用户统计（WebSocket 实时推送） | **Render / Railway** 等 Node 容器平台 | 可选 |
+| 后端 | 在线用户统计（WebSocket 实时推送） | **Cloudflare Workers**（首选）/ Render（备选） | 可选 |
 
 > GitHub Pages 只能托管静态文件，**无法运行 Node 服务**。因此在线人数统计需要单独部署后端；
 > 未部署后端时，前端会以「离线演示」模式运行，页面其余功能完全不受影响。
+
+两个后端实现接口完全一致，任选其一即可：
+
+- `worker/` —— **Cloudflare Workers + Durable Objects**（推荐：永不休眠、免费额度充足）
+- `backend/` —— Express 版（可部署到 Render / Railway / 任意 VPS）
 
 ---
 
@@ -30,17 +35,66 @@
 
 ## 二、后端：在线统计服务
 
-### 方式 A：Render 一键部署（推荐，有免费额度）
+### 方式 A：Cloudflare Workers（推荐）
+
+**优势**：永不休眠（打开页面即有人数，无需等待冷启动）、免费额度 10 万请求/天、
+全球边缘节点、使用 WebSocket Hibernation 时空闲连接不产生时长费用。
+
+#### 首次部署（命令行，约 1 分钟）
+
+```bash
+cd worker
+pnpm install
+
+# 登录（浏览器授权）
+npx wrangler login
+
+# 部署
+pnpm deploy
+```
+
+部署成功后会输出地址，形如：
+
+```
+https://orbis-presence-api.<你的子域>.workers.dev
+```
+
+#### 后续自动部署（GitHub Actions）
+
+在仓库 Settings → Secrets and variables → Actions 添加两个 Secret：
+
+| Secret | 获取方式 |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → My Profile → API Tokens → Create Token → 模板选 **Edit Cloudflare Workers** |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → Workers & Pages → 右侧 **Account ID** |
+
+配置后，修改 `worker/` 下代码即自动部署（`.github/workflows/deploy-worker.yml`）。
+未配置时该工作流会跳过部署并给出提示，不会失败。
+
+#### 技术要点
+
+- 全局单例 Durable Object（`PRESENCE`）作为在线状态唯一权威点
+- 使用 `ctx.acceptWebSocket()` 而非 `ws.accept()`，空闲时 DO 可被驱逐，**不收时长费**
+- 休眠会清空内存，因此峰值/趋势写入 `storage`，连接身份用 `serializeAttachment` 跟随连接
+- 免费版要求使用 SQLite 后端（`new_sqlite_classes`）
+
+#### 本地调试
+
+```bash
+cd worker
+pnpm dev        # http://localhost:8787
+pnpm typecheck
+```
+
+### 方式 B：Render（备选，Express 版）
 
 1. 打开 <https://dashboard.render.com/blueprints> → **New Blueprint Instance**
 2. 选择仓库 `fmlwlher/orbis-globe`
 3. Render 读取根目录 `render.yaml`，自动创建 `orbis-presence-api` 服务
-4. 部署完成后获得地址，形如 `https://orbis-presence-api.onrender.com`
 
-> 免费实例 15 分钟无访问会休眠，首次访问约需 30 秒唤醒；
-> 若要保证 WebSocket 实时性，可升级到 Starter 套餐。
+> 免费实例 15 分钟无访问会休眠，首次访问约需 30 秒唤醒。
 
-### 方式 B：Railway / Fly.io / 自建服务器（Docker）
+### 方式 C：Railway / Fly.io / 自建服务器（Docker）
 
 仓库已提供 `backend/Dockerfile`，任何支持容器的平台都可直接用：
 
@@ -86,7 +140,7 @@ location /api/ {
 2. 名称：`VITE_API_BASE_URL`，值：后端地址（**不带结尾斜杠**）
 
    ```
-   https://orbis-presence-api.onrender.com
+   https://orbis-presence-api.<你的子域>.workers.dev
    ```
 
 3. 到 Actions 页面重新运行 `Deploy to GitHub Pages`
@@ -141,4 +195,7 @@ curl https://<你的后端地址>/api/presence/visitors
 - **在线数**：按浏览器 `sessionId` 去重（同一浏览器多标签算 1 人）
 - **活跃连接**：含同一访客的多个标签页
 - **离线判定**：45 秒无心跳即剔除（覆盖断网、休眠等异常断开）
-- **数据存储**：纯内存，服务重启归零；多实例部署需改用 Redis
+- **数据存储**：
+  - Cloudflare 版：连接状态存于 Durable Object，峰值/趋势写入 DO storage，**重启不丢失**
+  - Express 版：纯内存，进程重启后峰值与趋势归零（在线数本身会随连接重建自动恢复）
+- **多实例**：Cloudflare 版天然单例（固定 DO 名 `global`）；Express 版多实例需改用 Redis
