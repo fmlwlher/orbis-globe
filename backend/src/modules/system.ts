@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 
-export const systemRouter = Router()
+export const systemRouter: Router = Router()
 
 // ============================================
 // System & Health Routes

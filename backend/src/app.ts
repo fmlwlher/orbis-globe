@@ -2,11 +2,11 @@ import express, { Application } from 'express'
 import cors from 'cors'
 import compression from 'compression'
 import 'express-async-errors'
-import { env } from './config/env'
-import { errorHandler } from './middleware/errorHandler'
-import { httpLogger } from './middleware/logger'
-import { systemRouter } from './modules/system'
-import { presenceRouter } from './modules/presence'
+import { env } from './config/env.js'
+import { errorHandler } from './middleware/errorHandler.js'
+import { httpLogger } from './middleware/logger.js'
+import { systemRouter } from './modules/system.js'
+import { presenceRouter } from './modules/presence/index.js'
 // ============================================
 // Add your domain module imports here
 // ============================================

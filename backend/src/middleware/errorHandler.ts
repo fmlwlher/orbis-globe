@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { ZodError } from 'zod'
-import { createLogger } from '../config/logger'
+import { createLogger } from '../config/logger.js'
 
 const logger = createLogger('ErrorHandler')
 

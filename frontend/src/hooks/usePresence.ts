@@ -102,7 +102,7 @@ async function probeBackend(): Promise<boolean> {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 3500)
-    const res = await fetch('api/presence', {
+    const res = await fetch(apiUrl('presence'), {
       signal: ctrl.signal,
       headers: { Accept: 'application/json' },
     })
@@ -117,17 +117,47 @@ async function probeBackend(): Promise<boolean> {
   }
 }
 
+/**
+ * 后端基地址解析
+ *
+ * - 本地开发（Vite）：留空，走同源 /api，由 dev server 代理到 localhost:3000
+ * - GitHub Pages 等纯静态托管：构建时注入 VITE_API_BASE_URL 指向外部 Node 服务
+ *   形如 https://orbis-api.onrender.com  （不带结尾斜杠，可含 /api 也可不含）
+ *
+ * 返回值为「可直接拼接 /presence 等路径」的前缀（含 /api）。
+ */
+const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
+
+/** REST 前缀，如 "" → "/api"；"https://x.com" → "https://x.com/api" */
+const API_PREFIX = RAW_API_BASE ? `${RAW_API_BASE}/api` : '/api'
+
+/** 拼 REST 路径：apiUrl('presence') → "/api/presence" 或 "https://x.com/api/presence" */
+function apiUrl(path: string): string {
+  return `${API_PREFIX}/${path.replace(/^\/+/, '')}`
+}
+
+/** WebSocket 地址：同源时用当前 host，跨域时把 API base 的 http(s) 换成 ws(s) */
 function wsUrl(): string {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const params = new URLSearchParams({ sid: store.sessionId })
   if (store.focus) params.set('focus', store.focus)
   if (store.coord) {
     params.set('lat', String(store.coord.lat))
     params.set('lng', String(store.coord.lng))
   }
-  // 走同源 /api 前缀：开发环境由 Vite 代理转发（ws: true），
-  // 生产环境由反代按 /api 转发，避免硬编码端口或额外代理规则
-  return `${proto}//${window.location.host}/api/ws/presence?${params.toString()}`
+
+  let origin = window.location.host
+  let proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+
+  if (RAW_API_BASE) {
+    // 外部后端：从绝对地址推导 ws 源
+    const u = new URL(RAW_API_BASE)
+    origin = u.host
+    proto = u.protocol === 'https:' ? 'wss:' : 'ws:'
+  }
+
+  // 统一走 /api/ws/presence：开发时由 Vite 代理（ws: true），
+  // 生产时由后端直接响应（后端同时接受 /ws/presence 与 /api/ws/presence）
+  return `${proto}//${origin}/api/ws/presence?${params.toString()}`
 }
 
 function startPing(send: () => void) {
@@ -147,7 +177,7 @@ function startPolling() {
   setState({ channel: 'polling' })
   const tick = async () => {
     try {
-      const res = await fetch('api/presence', { headers: { Accept: 'application/json' } })
+      const res = await fetch(apiUrl('presence'), { headers: { Accept: 'application/json' } })
       if (!res.ok) throw new Error(String(res.status))
       setSnapshot((await res.json()) as PresenceSnapshot)
     } catch {
@@ -226,7 +256,7 @@ function connectSSE() {
     return
   }
   try {
-    const es = new EventSource('api/presence/stream')
+    const es = new EventSource(apiUrl('presence/stream'))
     store.es = es
     setState({ channel: 'sse' })
 

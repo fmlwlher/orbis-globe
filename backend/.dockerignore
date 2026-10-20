@@ -1,0 +1,9 @@
+# 构建产物与依赖不入镜像上下文，显著减小上传体积
+node_modules
+dist
+coverage
+.env
+.env.*
+*.log
+.git
+.gitignore

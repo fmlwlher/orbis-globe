@@ -1,0 +1,26 @@
+# ── Render 蓝图（一键部署在线统计后端）──────────────────────
+# 用法：
+#   1. 登录 https://dashboard.render.com/ → New → Blueprint
+#   2. 选择仓库 fmlwlher/orbis-globe，Render 会自动读取本文件
+#   3. 部署完成后把服务地址填入 GitHub 仓库 Variable：VITE_API_BASE_URL
+#
+# 注意：免费实例会休眠，首次访问需等待约 30s 唤醒；
+#      升级到 Starter 可保持常驻，WebSocket 实时性更好。
+services:
+  - type: web
+    name: orbis-presence-api
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # 允许 GitHub Pages 站点跨域访问本服务
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: LOG_LEVEL
+        value: info

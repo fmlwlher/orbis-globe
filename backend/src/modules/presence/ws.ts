@@ -1,8 +1,8 @@
 import { IncomingMessage, Server } from 'http'
 import crypto from 'crypto'
 import { Duplex } from 'stream'
-import { presence, type PresenceSnapshot } from './store'
-import { createLogger } from '../../config/logger'
+import { presence, type PresenceSnapshot } from './store.js'
+import { createLogger } from '../../config/logger.js'
 
 const logger = createLogger('PresenceWS')
 

@@ -1,8 +1,8 @@
 import { createServer } from 'http'
-import { createApp } from './app'
-import { env } from './config/env'
-import { logger } from './config/logger'
-import { setupPresenceWebSocket } from './modules/presence/ws'
+import { createApp } from './app.js'
+import { env } from './config/env.js'
+import { logger } from './config/logger.js'
+import { setupPresenceWebSocket } from './modules/presence/ws.js'
 
 const startServer = async () => {
   try {

@@ -41,6 +41,15 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      - name: Report deployment target
+        # 便于在 Actions 日志里确认在线统计后端是否已接入
+        run: |
+          if [ -n "${{ vars.VITE_API_BASE_URL }}" ]; then
+            echo "在线统计后端: ${{ vars.VITE_API_BASE_URL }}"
+          else
+            echo "::notice title=后端未接入::未设置 VITE_API_BASE_URL，在线人数将显示「离线演示」模式。在 Settings → Secrets and variables → Actions → Variables 添加后重新运行即可。"
+          fi
+
       - name: Type check
         working-directory: frontend
         run: npx tsc -b --noEmit
@@ -48,6 +57,10 @@ jobs:
       - name: Build
         working-directory: frontend
         # vite.config.ts 会读取 GITHUB_REPOSITORY 自动推导 base 路径
+        # VITE_API_BASE_URL 来自仓库 Variable，用于指向外部 Node 后端（在线统计服务）
+        # 未配置时留空 → 前端以「离线演示」模式运行，页面功能不受影响
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: pnpm build
 
       - name: Add single-file edition

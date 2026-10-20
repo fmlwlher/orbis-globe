@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express'
-import { presence, PRESENCE_HEARTBEAT_TIMEOUT_MS } from './store'
-import { createLogger } from '../../config/logger'
+import { presence, PRESENCE_HEARTBEAT_TIMEOUT_MS } from './store.js'
+import { createLogger } from '../../config/logger.js'
 
 const logger = createLogger('PresenceRouter')
 
