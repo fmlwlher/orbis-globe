@@ -153,17 +153,26 @@ gl_FragColor.rgb += nightCol * cityGlow * 1.75;
 
 ## 部署
 
-推送到 `main` 分支即自动构建并发布到 GitHub Pages（见 `.github/workflows/deploy-pages.yml`）。
+当前推荐用 **Render 蓝图**一键部署前后端（`render.yaml`），仓库可保持 **private**：
 
-部署相关的两处关键适配：
+| 服务 | 类型 | 地址 |
+| --- | --- | --- |
+| `orbis-globe` | Static Site（免费不限流量） | `https://orbis-globe.onrender.com` |
+| `orbis-presence-api` | Docker Web Service（免费实例会休眠） | `https://orbis-presence-api.onrender.com` |
+
+操作步骤与备选方案（Cloudflare Workers / 任意 Docker 主机）见 [`docs/DEPLOY.md`](docs/DEPLOY.md)。
+
+> GitHub Pages 需要仓库为 public，因此该方案已不再作为主路径；`deploy-pages.yml` 仅保留给公开仓库场景。
+
+构建时的路径适配：
 
 | 问题 | 解决方式 |
 | --- | --- |
-| 站点部署在 `/orbis-globe/` 子路径 | `vite.config.ts` 从 `GITHUB_REPOSITORY` 自动推导 `base`，本地开发回退为 `/` |
+| 部署在子路径（如 Pages 的 `/orbis-globe/`） | `vite.config.ts` 从 `GITHUB_REPOSITORY` 自动推导 `base`，本地开发回退为 `/` |
 | 贴图使用绝对路径 `/textures/...` 会 404 | 改用 `import.meta.env.BASE_URL` 拼接 |
 | React Router 不认识子路径 | `BrowserRouter` 传入 `basename={import.meta.env.BASE_URL}` |
 
-也可用 `VITE_BASE_PATH` 环境变量手动覆盖（如绑定自定义域名时设为 `/`）。
+也可用 `VITE_BASE_PATH` 环境变量手动覆盖（Render 静态站点固定为 `/`）。
 
 ---
 

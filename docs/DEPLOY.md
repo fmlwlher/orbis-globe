@@ -1,27 +1,39 @@
 # 部署指南
 
-本项目包含两部分，部署方式不同：
+**当前推荐方案：前后端全部托管在 Render，一条 `render.yaml` 蓝图搞定，仓库可以保持 private。**
 
 | 部分 | 内容 | 部署位置 | 是否必需 |
 | --- | --- | --- | --- |
-| 前端 | React + Three.js 三维地球仪 | **GitHub Pages**（静态托管） | 必需 |
-| 后端 | 在线用户统计（WebSocket 实时推送） | **Cloudflare Workers**（首选）/ Render（备选） | 可选 |
+| 前端 | React + Three.js 三维地球仪 | **Render Static Site**（免费不限流量） | 必需 |
+| 后端 | 在线用户统计（WebSocket 实时推送） | **Render Docker Web Service**（备选：Cloudflare Workers） | 可选 |
 
-> GitHub Pages 只能托管静态文件，**无法运行 Node 服务**。因此在线人数统计需要单独部署后端；
+> 静态站点无法运行 Node 服务，因此在线人数统计需要单独部署后端；
 > 未部署后端时，前端会以「离线演示」模式运行，页面其余功能完全不受影响。
 
 两个后端实现接口完全一致，任选其一即可：
 
-- `worker/` —— **Cloudflare Workers + Durable Objects**（推荐：永不休眠、免费额度充足）
-- `backend/` —— Express 版（可部署到 Render / Railway / 任意 VPS）
+- `backend/` —— Express 版（Render 蓝图已包含，当前线上使用）
+- `worker/` —— **Cloudflare Workers + Durable Objects**（永不休眠、免费额度充足，但 `*.workers.dev` 在部分网络下不可达）
 
 ---
 
-## 一、前端：GitHub Pages（自动）
+## 一、前端：Render 静态站点（当前方案）
 
-推送到 `main` 分支即自动构建发布，工作流见 `.github/workflows/deploy-pages.yml`。
+`render.yaml` 已声明静态站点服务，Blueprint 同步后自动构建发布：
 
-- 站点地址：<https://fmlwlher.github.io/orbis-globe/>
+- 构建命令：`pnpm --dir frontend install --frozen-lockfile && pnpm --dir frontend build`
+- 发布目录：`./frontend/dist`
+- 环境变量：`VITE_BASE_PATH=/`、`VITE_API_BASE_URL=https://orbis-presence-api.onrender.com`
+- 路由：`/* → /index.html`（SPA 回退）
+
+> **为什么不用 GitHub Pages**：Pages 在 **private 仓库需要付费套餐**（GitHub Pro/Team）。
+> 仓库转 private 后 Pages 会立即下线，所以前端一并迁到了 Render。
+
+### 备选：GitHub Pages（仅限 public 仓库）
+
+推送到 `main` 即自动构建发布，工作流见 `.github/workflows/deploy-pages.yml`。
+
+- 站点地址：<https://fmlwlher.github.io/orbis-globe/>（仓库 private 时不可访问）
 - 单文件离线版：<https://fmlwlher.github.io/orbis-globe/globe.html>
 
 工作流会自动：
@@ -29,16 +41,17 @@
 2. 从 `GITHUB_REPOSITORY` 推导 `base` 子路径（`/orbis-globe/`）
 3. 附加 `globe.html`、写入 `.nojekyll`
 
-**首次部署需在仓库设置里开启 Pages**：Settings → Pages → Source 选择 **GitHub Actions**。
-
 ---
 
 ## 二、后端：在线统计服务
 
-### 方式 A：Cloudflare Workers（推荐）
+### 方式 A：Cloudflare Workers
 
 **优势**：永不休眠（打开页面即有人数，无需等待冷启动）、免费额度 10 万请求/天、
 全球边缘节点、使用 WebSocket Hibernation 时空闲连接不产生时长费用。
+
+**注意**：`*.workers.dev` 域名在中国大陆及部分网络下无法访问（返回连接超时），
+若目标用户在这些网络，请改用下方的方式 C（Render）。
 
 #### 首次部署（命令行，约 1 分钟）
 
@@ -86,13 +99,25 @@ pnpm dev        # http://localhost:8787
 pnpm typecheck
 ```
 
-### 方式 B：Render（备选，Express 版）
+### 方式 B：Render 蓝图（当前方案，前后端一起）
 
 1. 打开 <https://dashboard.render.com/blueprints> → **New Blueprint Instance**
-2. 选择仓库 `fmlwlher/orbis-globe`
-3. Render 读取根目录 `render.yaml`，自动创建 `orbis-presence-api` 服务
+2. 选择仓库 `fmlwlher/orbis-globe`（private 仓库需先在 Render 授权 GitHub 访问该私有仓库）
+3. Render 读取根目录 `render.yaml`，一次性创建两个服务：
 
-> 免费实例 15 分钟无访问会休眠，首次访问约需 30 秒唤醒。
+   | 服务名 | 类型 | 说明 |
+   | --- | --- | --- |
+   | `orbis-presence-api` | Docker Web | 在线统计后端，健康检查 `/api/health` |
+   | `orbis-globe` | Static Site | 前端静态站点，SPA 回退 `/* → /index.html` |
+
+4. 之后的每次 push 到 `main` 都会自动重新部署（`autoDeploy`）。
+
+> 免费 Web 实例 15 分钟无访问会休眠，首次访问约需 30 秒唤醒；
+> 静态站点不休眠，但首屏的数据请求会等待后端唤醒（前端会自动重试）。
+>
+> 若静态站点域名被 Render 自动改名（如 `orbis-globe-a1b2`），
+> 记得回到 `orbis-globe` 服务的环境变量里更新 `VITE_API_BASE_URL`
+> 对应的后端地址，以及后端 `CORS_ORIGIN`（当前为 `*`，无需修改）。
 
 ### 方式 C：Railway / Fly.io / 自建服务器（Docker）
 
@@ -134,18 +159,30 @@ location /api/ {
 
 后端地址有两种接入方式，任选其一。
 
-### 方式 1：GitHub Variable（Pages 构建时注入）
+### 方式 1：Render 静态站点环境变量（当前方案）
+
+在 `render.yaml` 的 `orbis-globe` 服务下已写死：
+
+```yaml
+envVars:
+  - key: VITE_API_BASE_URL
+    value: https://orbis-presence-api.onrender.com
+```
+
+也可以到 Render Dashboard → `orbis-globe` → Environment 手动改，改完 Redeploy 生效。
+
+### 方式 2：GitHub Variable（仅 Pages 方案需要）
 
 1. 仓库 → Settings → Secrets and variables → Actions → **Variables** → New variable
 2. 名称：`VITE_API_BASE_URL`，值：后端地址（**不带结尾斜杠**）
 
    ```
-   https://orbis-presence-api.<你的子域>.workers.dev
+   https://orbis-presence-api.onrender.com
    ```
 
 3. 到 Actions 页面重新运行 `Deploy to GitHub Pages`
 
-### 方式 2：本地 `.env`
+### 方式 3：本地 `.env`
 
 ```bash
 cd frontend
