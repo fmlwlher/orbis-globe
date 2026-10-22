@@ -102,13 +102,20 @@ class PresenceStore {
     if (this.clients.delete(id)) this.emit()
   }
 
-  /** 心跳 / 状态上报 */
+  /**
+   * 心跳 / 状态上报
+   *
+   * 注意：轮询降级通道下，前端可能尚未建立任何长连接就调用此接口，
+   * 此时按「轻量会话」补登记（id 与 sessionId 相同），否则 online 会恒为 0。
+   */
   touch(
     id: string,
     patch?: { focus?: string; lat?: number; lng?: number }
   ): void {
-    const client = this.clients.get(id)
-    if (!client) return
+    let client = this.clients.get(id)
+    if (!client) {
+      client = this.add({ id, sessionId: id })
+    }
     client.lastSeenAt = Date.now()
     if (patch) {
       if (typeof patch.focus === 'string') client.focus = patch.focus.slice(0, 64)

@@ -175,11 +175,29 @@ function stopPing() {
 function startPolling() {
   stopPolling()
   setState({ channel: 'polling' })
+  // 轮询模式下必须同时上报自身，否则服务端无从得知本访客在线（online 会恒为 0）
+  const beacon = async () => {
+    try {
+      await fetch(apiUrl('presence/heartbeat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: store.sessionId,
+          focus: store.focus,
+          lat: store.coord?.lat,
+          lng: store.coord?.lng,
+        }),
+      })
+    } catch {
+      // 上报失败不阻断取数，下一轮会重试
+    }
+  }
   const tick = async () => {
     try {
       const res = await fetch(apiUrl('presence'), { headers: { Accept: 'application/json' } })
       if (!res.ok) throw new Error(String(res.status))
       setSnapshot((await res.json()) as PresenceSnapshot)
+      void beacon()
     } catch {
       setState({ channel: 'offline' })
     }
