@@ -77,6 +77,10 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # 仓库切换 public/private 时 Pages 站点可能被一并停用，
+          # 开启后工作流会自动重新启用，无需手动到 Settings 里点
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
