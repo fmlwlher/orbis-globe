@@ -1,12 +1,22 @@
-# ── Render 蓝图（一键部署在线统计后端）──────────────────────
+# ── Render 蓝图 ─────────────────────────────────────────────
+# 包含两个服务：
+#   1. orbis-presence-api  —— 在线统计后端（Docker / Node）
+#   2. orbis-globe         —— 三维地球仪前端（静态站点）
+#
 # 用法：
 #   1. 登录 https://dashboard.render.com/ → New → Blueprint
-#   2. 选择仓库 fmlwlher/orbis-globe，Render 会自动读取本文件
-#   3. 部署完成后把服务地址填入 GitHub 仓库 Variable：VITE_API_BASE_URL
+#   2. 选择仓库，Render 自动读取本文件
+#   3. 部署完成后访问静态站点地址（形如 https://orbis-globe.onrender.com）
 #
-# 注意：免费实例会休眠，首次访问需等待约 30s 唤醒；
+# 说明：
+#   - 前端 + 后端都托管在 Render，不依赖 GitHub Pages，
+#     因此仓库可以设为 private（Pages 在私有仓库需付费套餐）。
+#   - 后端已放开 CORS（*），前端换域名无需再改后端配置。
+#
+# 注意：免费 Web 服务会休眠，首次访问需等待约 30s 唤醒；
 #      升级到 Starter 可保持常驻，WebSocket 实时性更好。
 services:
+  # ── 在线统计后端 ──────────────────────────────────────────
   - type: web
     name: orbis-presence-api
     runtime: docker
@@ -19,8 +29,36 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # 允许 GitHub Pages 站点跨域访问本服务
+      # 允许前端站点（含本地开发）跨域访问本服务
       - key: CORS_ORIGIN
         value: "*"
       - key: LOG_LEVEL
         value: info
+
+  # ── 三维地球仪前端（静态站点）──────────────────────────────
+  - type: web
+    name: orbis-globe
+    runtime: static
+    # 静态站点免费且不限流量，不消耗实例额度
+    buildCommand: pnpm --dir frontend install --frozen-lockfile && pnpm --dir frontend build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      # 部署在根路径（非 GitHub Pages 的 /orbis-globe/ 子路径）
+      - key: VITE_BASE_PATH
+        value: "/"
+      # 指向上面的在线统计后端
+      - key: VITE_API_BASE_URL
+        value: https://orbis-presence-api.onrender.com
+    # SPA 路由回退：React Router 需要所有未知路径回落到 index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # 贴图资源较大，允许长缓存
+      - path: /textures/*
+        name: Cache-Control
+        value: public, max-age=604800, immutable
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=604800, immutable
